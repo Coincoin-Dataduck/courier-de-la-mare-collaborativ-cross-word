@@ -105,7 +105,7 @@ function draw(r, c, anim) {
   if (v) {
     const pl = players[v.pid] || { name: '?', color: '#24211d' }
     e.innerHTML = nb + '<i' + (anim ? ' class="st"' : '') + ' title="' + esc(pl.name) + '" style="color:' + pl.color + '">' + v.ch + '</i>'
-  } else if (p) e.innerHTML = nb + '<i class="pc' + (anim ? ' dr' : '') + '" title="Au crayon (toi seul·e le vois)">' + p.toLowerCase() + '</i>'
+  } else if (p) e.innerHTML = nb + '<i class="pc' + (anim ? ' dr' : '') + '" title="Au crayon (toi seul·e le vois)">' + p + '</i>'
   else e.innerHTML = nb
   const o = others[k]
   if (o) { e.classList.add('o'); e.style.setProperty('--oc', o.color); e.insertAdjacentHTML('beforeend', '<span class="tag">' + esc(o.name) + '</span>') }
@@ -132,7 +132,7 @@ function refresh(scroll = true) {
   if (w) {
     $('dlabel').textContent = sensTxt(w)
     $('dtext').innerHTML = esc(defOf(w)) + ' <span style="color:#8a8273">(' + w.cells.length + ')</span>'
-    $('pat').innerHTML = w.cells.map(([r, c]) => { const k = key(r, c), v = cells[k], p = PC[k]; return v ? '<span>' + v.ch + '</span>' : p ? '<span class="pc">' + p.toLowerCase() + '</span>' : '<span></span>' }).join('')
+    $('pat').innerHTML = w.cells.map(([r, c]) => { const k = key(r, c), v = cells[k], p = PC[k]; return v ? '<span>' + v.ch + '</span>' : p ? '<span class="pc">' + p + '</span>' : '<span></span>' }).join('')
     const li = (w.d === 'h' ? $('lh') : $('lv')).querySelector('li[data-id="' + w.id + '"]')
     if (li) { li.classList.add('act'); if (scroll) { const ol = li.parentElement; const t = li.offsetTop - ol.offsetTop; if (t < ol.scrollTop || t > ol.scrollTop + ol.clientHeight - 40) ol.scrollTop = t - 40 } }
   } else { $('dlabel').textContent = ''; $('dtext').textContent = 'Case seule'; $('pat').innerHTML = '' }
@@ -150,7 +150,7 @@ function focusSel() {
 function patTxt(w) {
   const f = w.cells.filter(([r, c]) => cells[key(r, c)] || PC[key(r, c)]).length
   if (!f) return ''
-  return ' <em class="pt">' + w.cells.map(([r, c]) => { const k = key(r, c); return cells[k] ? '<i>' + cells[k].ch + '</i>' : PC[k] ? '<u>' + PC[k].toLowerCase() + '</u>' : '_' }).join('') + '</em>'
+  return ' <em class="pt">' + w.cells.map(([r, c]) => { const k = key(r, c); return cells[k] ? '<i>' + cells[k].ch + '</i>' : PC[k] ? '<u>' + PC[k] + '</u>' : '_' }).join('') + '</em>'
 }
 const complet = w => w.cells.every(([r, c]) => cells[key(r, c)])
 function liHTML(w) {
