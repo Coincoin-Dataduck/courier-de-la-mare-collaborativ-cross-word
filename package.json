@@ -1,0 +1,11 @@
+{
+  "name": "courrier-de-la-mare",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "local": "node tools/dev.mjs"
+  },
+  "devDependencies": { "wrangler": "^4.0.0" }
+}

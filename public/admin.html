@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>La rédaction — Le Courrier de la Mare</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%232c6a48'/%3E%3Ctext x='16' y='24' font-size='22' font-family='serif' font-weight='700' fill='%23f1ede2' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E">
+<link rel="preload" href="/fonts/NimbusMonoPS-Bold.otf" as="font" type="font/otf" crossorigin>
+<link rel="stylesheet" href="/journal.css">
+</head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    
+    <filter id="graphite"><feTurbulence type="fractalNoise" baseFrequency="1.2" numOctaves="1" seed="9" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.3 1.5" result="m"/><feComposite in="SourceGraphic" in2="m" operator="in"/></filter><filter id="stamp"><feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="2" seed="4" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.2 1.9" result="m"/><feComposite in="SourceGraphic" in2="m" operator="in" result="c"/><feTurbulence type="fractalNoise" baseFrequency=".04" numOctaves="2" seed="2" result="t"/><feDisplacementMap in="c" in2="t" scale="3"/></filter><filter id="press" x="-1%" y="-3%" width="102%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="4" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.9" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feGaussianBlur in="d" stdDeviation=".22" result="b"/>
+      <feTurbulence type="fractalNoise" baseFrequency=".55" numOctaves="2" seed="14" result="w"/>
+      <feColorMatrix in="w" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.2 1.55" result="wm"/>
+      <feComposite in="b" in2="wm" operator="in"/>
+    </filter>
+    
+    <filter id="fib" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".85 .55" numOctaves="3" seed="21"/>
+      <feColorMatrix values="0 0 0 0 .38  0 0 0 0 .34  0 0 0 0 .27  0 0 0 -.8 .5"/>
+    </filter>
+    <filter id="cloud" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".012" numOctaves="3" seed="5"/>
+      <feColorMatrix values="0 0 0 0 .55  0 0 0 0 .5  0 0 0 0 .38  0 0 0 -1.2 .62"/>
+    </filter>
+  </defs>
+</svg>
+
+<section class="page adm">
+  <div class="tex"><svg preserveAspectRatio="none"><rect width="100%" height="100%" filter="url(#fib)" opacity=".5"/><rect width="100%" height="100%" filter="url(#cloud)" opacity=".35"/></svg></div>
+  <div class="a-top ink"><span><b>La rédaction</b></span><span>Réservé au personnel</span><span>Prix : 42 francs</span></div>
+  <header style="padding:12px 0 10px;text-align:center"><h1 class="a-title ink" style="font-size:clamp(36px,6vw,64px)">Le Courrier de la Mare</h1></header>
+  <div class="a-band ink"><span>Salle de rédaction</span><span class="x acc">On fabrique les grilles ici</span><span id="cpt"></span></div>
+  <div class="a-rule"></div>
+
+  <div id="vue-liste">
+    <div class="outils" style="margin-top:16px"><h2 style="margin:0">Les grilles</h2><span class="etat"></span><button class="pbtn vert" id="nouvelle">Nouvelle grille</button></div>
+    <table class="liste"><thead><tr><th>N°</th><th>Date</th><th class="mob">Taille</th><th class="mob">Journal d'origine</th><th>Lien à partager</th><th></th></tr></thead><tbody id="grilles"></tbody></table>
+    <p class="msg" id="vide"></p>
+  </div>
+
+  <div id="vue-ed" class="hide">
+    <div class="outils" style="margin-top:16px"><button class="pbtn" id="retour">← Les grilles</button><h2 style="margin:0 0 0 8px" id="ed-titre">Nouvelle grille</h2></div>
+
+    <p class="k">1. La taille</p>
+    <div class="form">
+      <label>Lignes<input type="number" id="f-rows" min="3" max="40" value="32"></label>
+      <label>Colonnes<input type="number" id="f-cols" min="3" max="40" value="35"></label>
+      <label class="l2"><small>Changer la taille garde les cases noires déjà posées en haut à gauche.</small><button class="pbtn" id="f-taille" style="align-self:flex-start">Appliquer la taille</button></label>
+    </div>
+
+    <p class="k">2. Les cases noires</p>
+    <div class="outils"><span class="msg" style="margin:0">Clique ou glisse sur les cases pour les noircir ou les blanchir.</span><span class="etat" id="ed-compte"></span><button class="pbtn" id="ed-vider">Tout blanchir</button></div>
+    <div class="ed-wrap">
+      <div class="ed-vp"><div class="g ed" id="ed-g"></div></div>
+      <div class="defin">
+        <p class="k" style="margin-top:0">3. Les définitions</p>
+        <p class="msg">Une ligne par numéro, comme dans le journal. Les définitions d'une même ligne sont séparées par des points : la 1<sup>re</sup> va au 1<sup>er</sup> mot, la 2<sup>e</sup> au 2<sup>e</sup>…</p>
+        <h3 class="rub2 ink">Horizontalement</h3>
+        <textarea class="zone" id="f-h" spellcheck="false" placeholder="1. Ne se fait pas en un jour. Note.&#10;2. Rongeur."></textarea>
+        <div class="verif" id="v-h"></div>
+        <h3 class="rub2 ink">Verticalement</h3>
+        <textarea class="zone" id="f-v" spellcheck="false"></textarea>
+        <div class="verif" id="v-v"></div>
+      </div>
+    </div>
+
+    <p class="k">4. Le journal du jour</p>
+    <div class="form">
+      <label class="l2">Journal d'origine<input id="f-source" placeholder="Ouest-France, Le Monde…"></label>
+      <label>Date de l'édition<input type="date" id="f-date"></label>
+      <label>On fête<input id="f-saint" placeholder="Firmin"></label>
+      <label>Météo samedi<input id="f-sam" placeholder="Averses, 11°"></label>
+      <label>Météo dimanche<input id="f-dim" placeholder="Éclaircies, 14°"></label>
+      <label>Lune<input id="f-lune" placeholder="calculée toute seule"></label>
+      <label>Soleil<input id="f-soleil" placeholder="8 h 07 – 19 h 08"></label>
+      <label class="l4">Petites annonces<small>Une annonce par ligne. La première phrase s'imprime en gras.</small><textarea id="f-pa" spellcheck="true"></textarea></label>
+    </div>
+
+    <div class="barre"><span class="etat" id="ed-etat"></span><a class="pbtn hide" id="ed-voir" target="_blank" rel="noopener">Ouvrir la grille</a><button class="pbtn vert" id="ed-save">Enregistrer</button></div>
+  </div>
+  <footer class="ours">
+    <p>Directeur de la publication : <b>Rocket</b>. Imprimé par <b>le Canard</b>, sous la direction d'<b>Astra</b>.</p>
+    <p class="vagues">N'oubliez pas, lectrices, lecteurs : faites des vagues.</p>
+  </footer>
+
+</section>
+<script type="module" src="/js/admin.js"></script>
+</body></html>

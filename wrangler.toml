@@ -1,0 +1,22 @@
+name = "courrier-de-la-mare"
+main = "src/worker.js"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+# les adresses /g/..., /admin/... et /api/... passent par le Worker
+run_worker_first = ["/g/*", "/admin/*", "/api/*", "/"]
+not_found_handling = "404-page"
+
+[[durable_objects.bindings]]
+name = "GRID"
+class_name = "Grid"
+
+[[durable_objects.bindings]]
+name = "REGISTRY"
+class_name = "Registry"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Grid", "Registry"]

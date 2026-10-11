@@ -1,0 +1,66 @@
+
+/* ===== application ===== */
+body{padding:18px 0 40px}
+.page{padding-bottom:0}
+.hide{display:none!important}
+.voile{position:fixed;inset:0;z-index:50;background:rgba(40,36,30,.55);display:flex;align-items:center;justify-content:center;padding:16px}
+.voile .page{width:100%;max-width:440px;margin:0}
+.champ{display:block;width:100%;background:transparent;border:0;border-bottom:2px solid var(--ink);outline:0;border-radius:0}
+.encres{flex-wrap:wrap}
+.encres button{width:30px;height:30px;border-radius:50%;border:0;cursor:pointer;padding:0}
+.encres button.on{outline:2px solid var(--ink);outline-offset:3px}
+.btn{cursor:pointer}
+.btn:disabled{opacity:.45;cursor:default}
+.classement .moi{font-weight:700}
+.classement .off{opacity:.55}
+.classement .plus{display:block;font:italic 400 13px/1.3 Century,serif;color:var(--grey);border:0;padding-top:6px}
+.classement .plus::before{content:none}
+.etat{font:400 12px/1 Narrow,sans-serif;letter-spacing:.06em;color:var(--grey)}
+.etat.ko{color:#b3261e}
+.moiici{font:italic 400 13px/1.3 Century,serif;color:var(--grey);margin-top:8px}
+.moiici button{font:inherit;color:var(--green);background:none;border:0;text-decoration:underline;cursor:pointer;padding:0}
+.c .tag{animation:none}
+.solo{max-width:560px;margin:8vh auto 0}
+/* ===== admin ===== */
+.adm{max-width:1100px}
+.adm h2{font:700 30px/1 Century,serif;letter-spacing:-.02em;margin:18px 0 6px}
+.adm .k{margin-top:18px}
+.liste{width:100%;border-collapse:collapse;font:400 14.5px/1.3 Times,serif;margin:8px 0 16px}
+.liste th{font:700 11.5px/1 Narrow,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--green);text-align:left;border-bottom:1px solid var(--ink);padding:6px 6px}
+.liste td{border-bottom:1px dotted #9a9283;padding:7px 6px;vertical-align:middle}
+.liste a{color:var(--ink)}
+.lien{font:700 12px/1.2 Mono,monospace;word-break:break-all}
+.pbtn{font:700 12px/1 Narrow,sans-serif;letter-spacing:.1em;text-transform:uppercase;border:1px solid var(--ink);background:transparent;color:var(--ink);padding:7px 10px;cursor:pointer;white-space:nowrap}
+.pbtn:hover{background:#ddd6c6}
+.pbtn.vert{background:var(--green);border-color:var(--green);color:#f1ede2}
+.pbtn.rouge{border-color:#b3261e;color:#b3261e}
+.form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 16px;margin:8px 0}
+.form label{display:flex;flex-direction:column;gap:4px;font:700 11px/1 Narrow,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#4a453c}
+.form label.l2{grid-column:span 2}.form label.l4{grid-column:1/-1}
+.form input,.form textarea,.zone{font:400 15px/1.35 Times,serif;color:var(--ink);background:#f3efe5;border:1px solid #8a8273;padding:7px 8px;border-radius:0;letter-spacing:0;text-transform:none}
+.form textarea{min-height:120px;resize:vertical}
+.form small{font:italic 400 12.5px/1.3 Century,serif;letter-spacing:0;text-transform:none;color:var(--grey)}
+.ed-wrap{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,420px);gap:20px;margin-top:8px}
+.ed-vp{overflow:auto;max-height:80vh;border:1px solid #c9c2b2;padding:6px;background:rgba(255,255,255,.15)}
+.ed .c{cursor:crosshair}
+.ed .c b{position:absolute;top:1px;left:2px;font:700 calc(var(--cs)*.34)/1 Narrow,sans-serif;color:#6f685d}
+.ed .c.n b{display:none}
+.ed .c.hl{background:#dde6dc}
+.outils{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.outils .etat{margin-left:auto}
+.defin h3{margin-top:4px}
+.zone{width:100%;min-height:280px;font:400 14px/1.6 Times,serif;white-space:pre;overflow:auto;resize:vertical;tab-size:2}
+.verif{font:400 13px/1.35 Times,serif;max-height:220px;overflow:auto;margin:6px 0 14px}
+.verif p{padding:2px 0;border-bottom:1px dotted #b0a897;display:flex;gap:8px}
+.verif p b{font:700 12px/1.4 Narrow,sans-serif;min-width:26px}
+.verif .ok{color:var(--green)}.verif .ko{color:#b3261e}
+.verif em{color:var(--grey);margin-left:auto;font:400 12px/1.4 Narrow,sans-serif;white-space:nowrap}
+.barre{position:sticky;bottom:0;z-index:5;display:flex;gap:10px;align-items:center;justify-content:flex-end;background:var(--paper);border-top:3px solid var(--ink);padding:10px 0 12px;margin-top:14px}
+.barre .etat{margin-right:auto}
+.msg{font:italic 400 14px/1.35 Century,serif;margin:6px 0}
+@media (max-width:760px){
+  .form{grid-template-columns:1fr 1fr}.form label.l2{grid-column:1/-1}
+  .ed-wrap{grid-template-columns:1fr}
+  .liste .mob{display:none}
+}
+.defin{min-width:0}.ed-wrap>*{min-width:0}
