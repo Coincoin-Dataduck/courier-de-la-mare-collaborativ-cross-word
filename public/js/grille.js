@@ -149,14 +149,15 @@ function focusSel() {
 // ---------- listes de définitions ----------
 function patTxt(w) {
   const f = w.cells.filter(([r, c]) => cells[key(r, c)] || PC[key(r, c)]).length
-  if (!f || w.cells.every(([r, c]) => cells[key(r, c)])) return ''
-  return ' <em class="pt">' + w.cells.map(([r, c]) => { const k = key(r, c); return cells[k] ? cells[k].ch : PC[k] ? PC[k].toLowerCase() : '_' }).join('') + '</em>'
+  if (!f) return ''
+  return ' <em class="pt">' + w.cells.map(([r, c]) => { const k = key(r, c); return cells[k] ? '<i>' + cells[k].ch + '</i>' : PC[k] ? '<u>' + PC[k].toLowerCase() + '</u>' : '_' }).join('') + '</em>'
 }
+const complet = w => w.cells.every(([r, c]) => cells[key(r, c)])
 function liHTML(w) {
   return '<b>' + w.n + '.</b> <span>' + esc(defOf(w)) + '</span> <em class="ln">(' + w.cells.length + ')</em>' + patTxt(w)
 }
 function list(d, ol) {
-  ol.innerHTML = W[d].map(w => '<li data-id="' + w.id + '">' + liHTML(w) + '</li>').join('')
+  ol.innerHTML = W[d].map(w => '<li data-id="' + w.id + '"' + (complet(w) ? ' class="ok"' : '') + '>' + liHTML(w) + '</li>').join('')
   ol.onclick = e => {
     const li = e.target.closest('li'); if (!li) return
     const w = W.byId[li.dataset.id]; if (!w) return
@@ -167,7 +168,7 @@ function list(d, ol) {
   }
 }
 function updLines(r, c) {
-  for (const w of Object.values(byCell[key(r, c)] || {})) { const li = document.querySelector('li[data-id="' + w.id + '"]'); if (li) li.innerHTML = liHTML(w) }
+  for (const w of Object.values(byCell[key(r, c)] || {})) { const li = document.querySelector('li[data-id="' + w.id + '"]'); if (li) { li.innerHTML = liHTML(w); li.classList.toggle('ok', complet(w)) } }
 }
 
 // ---------- saisie ----------

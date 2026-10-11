@@ -238,3 +238,10 @@ body{padding:18px 0 40px}
 .doublon p{margin:0 0 10px}
 .doublon #d-btns{display:flex;gap:8px;flex-wrap:wrap}
 .doublon #d-btns.hide{display:none}
+
+/* liste : mots complets rayés, motif plus lisible */
+.defs .pt i{font-style:normal;color:var(--ink)}
+.defs .pt u{text-decoration:none;font:400 13px/1 Crayon,serif;color:#55524d;letter-spacing:.05em}
+.defs li.ok>span{color:#8a8273;text-decoration:line-through;text-decoration-color:rgba(36,33,29,.5)}
+.defs li.ok>b,.defs li.ok .ln{color:#a39b8b}
+.defs li.ok .pt i{color:var(--green)}
