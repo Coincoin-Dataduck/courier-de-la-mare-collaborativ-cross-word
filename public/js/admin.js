@@ -1,10 +1,10 @@
 // Le Courrier de la Mare — la salle de rédaction (admin)
-import { words, splitDefs } from './shared.js'
+import { words, mirror } from './shared.js'
 
 const $ = id => document.getElementById(id)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const secret = location.pathname.split('/').filter(Boolean)[1]
-const API = '/api/admin/' + encodeURIComponent(secret) + '/grids'
+const API = '/api/admin/' + encodeURIComponent(decodeURIComponent(secret)) + '/grids'
 const ANNONCES = [
   'Vends paille. 25 francs les 12 brins.',
   'Crapaud cherche princesse. S’adresser à la mare.',
@@ -13,9 +13,11 @@ const ANNONCES = [
   'Rocket le corgi cherche coussin près du feu, confortable et sans enquiquineur.'
 ]
 
-let cur = null       // grille en cours d'édition
-let R = 32, C = 35, B = ''
-let dirty = false
+let cur = null
+let R = 15, C = 15, B = ''
+let clues = {}
+let W = null, el = []
+let mode = 'noir', act = null, dirty = false
 
 async function api(path = '', opt = {}) {
   const r = await fetch(API + path, { ...opt, headers: { 'content-type': 'application/json' } })
@@ -24,11 +26,11 @@ async function api(path = '', opt = {}) {
 }
 const lien = id => location.origin + '/g/' + id
 const fdate = d => d ? new Date(d + (d.length === 10 ? 'T12:00:00' : '')).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
+const meta = () => ({ rows: R, cols: C, blacks: B })
 
 // ---------- la liste ----------
 async function liste() {
   $('vue-ed').classList.add('hide'); $('vue-liste').classList.remove('hide')
-  history.replaceState(null, '', location.pathname)
   let gs = []
   try { gs = await api() } catch (e) { $('vide').textContent = 'Impossible de lire la liste : ' + e.message; return }
   $('cpt').textContent = gs.length + ' grille' + (gs.length > 1 ? 's' : '')
@@ -55,11 +57,10 @@ async function ouvrir(id) {
   let m = null, info = null
   if (id) { try { info = await api('/' + id); m = info.meta } catch (e) { alert(e.message); return } }
   cur = m
-  R = m ? m.rows : 32; C = m ? m.cols : 35; B = m ? m.blacks : '0'.repeat(R * C)
+  R = m ? m.rows : 15; C = m ? m.cols : 15; B = m ? m.blacks : '0'.repeat(R * C)
+  clues = { ...((m && m.clues) || {}) }
   $('ed-titre').textContent = m ? 'Grille n° ' + m.numero : 'Nouvelle grille'
   $('f-rows').value = R; $('f-cols').value = C
-  $('f-h').value = m ? lignes(m.defsH) : ''
-  $('f-v').value = m ? lignes(m.defsV) : ''
   $('f-source').value = m ? m.source : ''
   $('f-date').value = m ? m.date : new Date().toISOString().slice(0, 10)
   $('f-saint').value = m ? m.saint : ''
@@ -69,113 +70,140 @@ async function ouvrir(id) {
   $('ed-voir').classList.toggle('hide', !m); if (m) $('ed-voir').href = '/g/' + m.id
   $('ed-etat').textContent = info && info.filled ? 'Attention : ' + info.filled + ' lettres déjà posées par ' + info.players + ' joueur' + (info.players > 1 ? 's' : '') + '. Changer les cases noires efface les lettres concernées.' : ''
   $('vue-liste').classList.add('hide'); $('vue-ed').classList.remove('hide')
-  dirty = false
-  grille(); verif(); scrollTo(0, 0)
-}
-// une ligne par numéro : "1. Déf. Déf."
-const lignes = arr => arr.map((t, i) => (i + 1) + '. ' + (t || '').replace(/^\s*\d+\s*[.)\-:]\s*/, '')).join('\n')
-function lire(txt, n) {
-  const out = Array(n).fill(''), ls = txt.split('\n')
-  let auto = 0
-  for (const l of ls) {
-    if (!l.trim()) continue
-    const m = l.match(/^\s*(\d+)\s*[.)\-:]\s*(.*)$/)
-    if (m) { const i = +m[1] - 1; if (i >= 0 && i < n) { out[i] = m[2].trim(); auto = i + 1 } }
-    else if (auto < n) out[auto++] = l.trim()
-  }
-  return out
+  dirty = false; act = null
+  setMode(m ? 'def' : 'noir')
+  grille(); scrollTo(0, 0)
 }
 const black = (r, c) => B[r * C + c] === '1'
 function setBlack(r, c, v) { const i = r * C + c; B = B.slice(0, i) + (v ? '1' : '0') + B.slice(i + 1) }
 
+function setMode(m) {
+  mode = m
+  for (const b of $('ed-mode').querySelectorAll('button')) b.classList.toggle('on', b.dataset.m === m)
+  $('ed-g').classList.toggle('def', m === 'def')
+  $('ed-aide').textContent = m === 'noir'
+    ? 'Clique ou glisse sur les cases pour les noircir ou les blanchir. Avec la symétrie, la case opposée suit (demi-tour, comme dans les journaux).'
+    : 'Clique sur une case pour écrire la définition de son mot (clique encore pour passer d’horizontal à vertical). Entrée passe au mot suivant.'
+}
+$('ed-mode').onclick = e => { const b = e.target.closest('button'); if (b) setMode(b.dataset.m) }
+
 function grille() {
-  const g = $('ed-g'), cs = Math.max(14, Math.min(26, Math.floor(($('ed-g').parentElement.clientWidth - 40) / C)))
-  g.style.setProperty('--cs', cs + 'px'); g.style.setProperty('--lab', '22px')
-  g.style.gridTemplateColumns = 'var(--lab) repeat(' + C + ',var(--cs))'
-  let h = '<div></div>'
-  for (let c = 0; c < C; c++) h += '<div class="lab col">' + (c + 1) + '</div>'
-  for (let r = 0; r < R; r++) {
-    h += '<div class="lab row">' + (r + 1) + '</div>'
-    for (let c = 0; c < C; c++) {
-      const cl = ['c']; if (black(r, c)) cl.push('n'); if (r === 0) cl.push('top'); if (c === 0) cl.push('left'); if (c === C - 1) cl.push('right'); if (r === R - 1) cl.push('bot')
-      h += '<div class="' + cl.join(' ') + '" data-r="' + r + '" data-c="' + c + '"></div>'
-    }
+  W = words(meta())
+  const g = $('ed-g'), cs = Math.max(16, Math.min(34, Math.floor((g.parentElement.clientWidth - 20) / C)))
+  g.style.setProperty('--cs', cs + 'px')
+  g.style.gridTemplateColumns = 'repeat(' + C + ',var(--cs))'
+  let h = ''
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    const cl = ['c']; if (black(r, c)) cl.push('n'); if (r === 0) cl.push('top'); if (c === 0) cl.push('left'); if (c === C - 1) cl.push('right'); if (r === R - 1) cl.push('bot')
+    const n = W.nums[r + ',' + c]
+    h += '<div class="' + cl.join(' ') + '" data-r="' + r + '" data-c="' + c + '">' + (n ? '<b class="num">' + n + '</b>' : '') + '</div>'
   }
   g.innerHTML = h
-  compte()
+  el = []; g.querySelectorAll('.c').forEach(e => { (el[+e.dataset.r] ||= [])[+e.dataset.c] = e })
+  const nb = B.split('').filter(x => x === '1').length
+  $('ed-compte').textContent = nb + ' cases noires · ' + (W.h.length + W.v.length) + ' mots'
+  defs()
 }
-function compte() { const n = B.split('').filter(x => x === '1').length; $('ed-compte').textContent = n + ' cases noires sur ' + R * C }
+function renum() {
+  W = words(meta())
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    const n = W.nums[r + ',' + c], e = el[r][c], b = e.firstChild
+    if (n) { if (!b) e.innerHTML = '<b class="num">' + n + '</b>'; else if (b.textContent != n) b.textContent = n }
+    else if (b) e.innerHTML = ''
+  }
+}
 
-// clic ou glisser pour noircir / blanchir
+// ---------- les définitions ----------
+function defs() {
+  for (const d of ['h', 'v']) {
+    $('d-' + d).innerHTML = W[d].map(w => '<p data-id="' + w.id + '" class="' + (clues[w.id] ? '' : 'vide') + '"><b>' + w.n + '.</b><input data-id="' + w.id + '" value="' + esc(clues[w.id] || '') + '" placeholder="Définition" maxlength="300"><em>' + w.cells.length + ' lettres</em></p>').join('') || '<p class="msg">Pas encore de mot.</p>'
+  }
+  manque()
+  if (act && !W.byId[act]) act = null
+  hl()
+}
+function manque() {
+  const all = [...W.h, ...W.v], n = all.filter(w => !clues[w.id]).length
+  $('ed-manque').textContent = n ? n + ' sans définition' : all.length ? 'tout est rempli' : ''
+  return n
+}
+function hl(scroll) {
+  document.querySelectorAll('#ed-g .c.hl,#ed-g .c.hs').forEach(e => e.classList.remove('hl', 'hs'))
+  document.querySelectorAll('.dl p.act').forEach(e => e.classList.remove('act'))
+  const w = act && W.byId[act]; if (!w) return
+  w.cells.forEach(([r, c], i) => el[r][c].classList.add(i ? 'hl' : 'hs'))
+  const p = document.querySelector('.dl p[data-id="' + w.id + '"]')
+  if (p) { p.classList.add('act'); if (scroll) { p.scrollIntoView({ block: 'nearest' }); p.querySelector('input').focus({ preventScroll: true }) } }
+}
+for (const d of ['h', 'v']) {
+  const box = $('d-' + d)
+  box.addEventListener('input', e => {
+    const i = e.target.closest('input'); if (!i) return
+    const t = i.value.trim()
+    if (t) clues[i.dataset.id] = i.value; else delete clues[i.dataset.id]
+    i.parentElement.classList.toggle('vide', !t); dirty = true; manque()
+  })
+  box.addEventListener('focusin', e => { const i = e.target.closest('input'); if (i) { act = i.dataset.id; hl() } })
+  box.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    const all = [...W.h, ...W.v], k = all.findIndex(w => w.id === act), n = all[k + 1]
+    if (n) { act = n.id; hl(true) }
+  })
+}
+
+// ---------- clics dans la grille ----------
 {
   const g = $('ed-g'); let paint = null
   const at = e => { const t = document.elementFromPoint(e.clientX, e.clientY); return t && t.closest('#ed-g .c') }
+  const put = (r, c, v) => {
+    let n = 0
+    const one = (a, b) => { if (black(a, b) !== v) { setBlack(a, b, v); el[a][b].classList.toggle('n', v); n++ } }
+    one(r, c); if ($('ed-sym').checked) one(...mirror(meta(), r, c))
+    return n
+  }
   g.addEventListener('pointerdown', e => {
-    const c = at(e); if (!c) return
+    const x = at(e); if (!x) return
+    const r = +x.dataset.r, c = +x.dataset.c
+    if (mode === 'def') {
+      if (black(r, c)) return
+      const k = r + ',' + c, cand = [...W.h, ...W.v].filter(w => w.cells.some(([a, b]) => a + ',' + b === k))
+      if (!cand.length) return
+      const i = cand.findIndex(w => w.id === act)
+      act = cand[(i + 1) % cand.length].id
+      e.preventDefault(); hl(true); return
+    }
     e.preventDefault()
-    const r = +c.dataset.r, cc = +c.dataset.c
-    paint = !black(r, cc); setBlack(r, cc, paint); c.classList.toggle('n', paint)
-    g.setPointerCapture(e.pointerId)
+    paint = !black(r, c); put(r, c, paint)
+    g.setPointerCapture(e.pointerId); renum()
   })
   g.addEventListener('pointermove', e => {
     if (paint === null) return
-    const c = at(e); if (!c) return
-    const r = +c.dataset.r, cc = +c.dataset.c
-    if (black(r, cc) !== paint) { setBlack(r, cc, paint); c.classList.toggle('n', paint) }
+    const x = at(e); if (!x) return
+    if (put(+x.dataset.r, +x.dataset.c, paint)) renum()
   })
-  const stop = () => { if (paint !== null) { paint = null; dirty = true; compte(); verif() } }
+  const stop = () => { if (paint !== null) { paint = null; dirty = true; grille() } }
   g.addEventListener('pointerup', stop); g.addEventListener('pointercancel', stop)
   g.style.touchAction = 'none'
 }
-$('ed-vider').onclick = () => { if (!confirm('Blanchir toute la grille ?')) return; B = '0'.repeat(R * C); dirty = true; grille(); verif() }
+$('ed-vider').onclick = () => { if (!confirm('Blanchir toute la grille ?')) return; B = '0'.repeat(R * C); dirty = true; grille() }
 $('f-taille').onclick = () => {
   const nr = Math.max(3, Math.min(40, +$('f-rows').value || 0)), nc = Math.max(3, Math.min(40, +$('f-cols').value || 0))
   let nb = ''
   for (let r = 0; r < nr; r++) for (let c = 0; c < nc; c++) nb += r < R && c < C ? B[r * C + c] : '0'
   R = nr; C = nc; B = nb; $('f-rows').value = R; $('f-cols').value = C; dirty = true
-  grille(); verif()
+  grille()
 }
-
-// vérification ligne par ligne : autant de définitions que de mots ?
-function verif() {
-  const meta = { rows: R, cols: C, blacks: B }, W = words(meta)
-  const dh = lire($('f-h').value, R), dv = lire($('f-v').value, C)
-  const bloc = (d, n, dd) => {
-    let h = '', bad = 0
-    for (let i = 0; i < n; i++) {
-      const ws = W[d].filter(w => w.line === i), nd = splitDefs(dd[i]).length
-      if (!ws.length && !nd) continue
-      const ok = ws.length === nd
-      if (!ok) bad++
-      h += '<p class="' + (ok ? 'ok' : 'ko') + '"><b>' + (i + 1) + '.</b><span>' + (ok ? '✓ ' + nd + ' définition' + (nd > 1 ? 's' : '') : nd + ' définition' + (nd > 1 ? 's' : '') + ' pour ' + ws.length + ' mot' + (ws.length > 1 ? 's' : '')) + '</span><em>' + ws.map(w => w.cells.length).join(', ') + (ws.length ? ' lettres' : '') + '</em></p>'
-    }
-    return { h, bad }
-  }
-  const a = bloc('h', R, dh), b = bloc('v', C, dv)
-  $('v-h').innerHTML = a.h; $('v-v').innerHTML = b.h
-  const bad = a.bad + b.bad
-  $('ed-save').dataset.bad = bad
-  return bad
-}
-for (const id of ['f-h', 'f-v']) $(id).addEventListener('input', () => { dirty = true; verif() })
 for (const id of ['f-source', 'f-date', 'f-saint', 'f-sam', 'f-dim', 'f-lune', 'f-soleil', 'f-pa']) $(id).addEventListener('input', () => dirty = true)
 
-// surligner dans la grille la ligne où se trouve le curseur
-function hl(d) {
-  const ta = $(d === 'h' ? 'f-h' : 'f-v'), n = ta.value.slice(0, ta.selectionStart).split('\n').length
-  const line = ta.value.split('\n')[n - 1] || '', m = line.match(/^\s*(\d+)/), i = (m ? +m[1] : n) - 1
-  document.querySelectorAll('#ed-g .c.hl').forEach(e => e.classList.remove('hl'))
-  document.querySelectorAll('#ed-g .c').forEach(e => { if ((d === 'h' ? +e.dataset.r : +e.dataset.c) === i) e.classList.add('hl') })
-}
-for (const d of ['h', 'v']) { const ta = $('f-' + d); for (const ev of ['click', 'keyup', 'focus']) ta.addEventListener(ev, () => hl(d)) ; ta.addEventListener('blur', () => document.querySelectorAll('#ed-g .c.hl').forEach(e => e.classList.remove('hl'))) }
-
+// ---------- enregistrer ----------
 $('ed-save').onclick = async () => {
-  const bad = verif()
-  if (bad && !confirm(bad + ' ligne' + (bad > 1 ? 's ne correspondent' : ' ne correspond') + ' pas (nombre de définitions ≠ nombre de mots). Enregistrer quand même ?')) return
+  const n = manque()
+  if (n && !confirm(n + ' mot' + (n > 1 ? 's n’ont' : ' n’a') + ' pas encore de définition. Enregistrer quand même ?')) return
   if (cur && cur.blacks !== B && !confirm('Les cases noires ont changé : les lettres sur les cases devenues noires seront effacées. On y va ?')) return
+  const keep = {}; for (const w of [...W.h, ...W.v]) if (clues[w.id]) keep[w.id] = clues[w.id].trim()
   const body = {
-    rows: R, cols: C, blacks: B,
-    defsH: lire($('f-h').value, R), defsV: lire($('f-v').value, C),
+    rows: R, cols: C, blacks: B, clues: keep,
     source: $('f-source').value.trim(), date: $('f-date').value, saint: $('f-saint').value.trim(),
     meteoSam: $('f-sam').value.trim(), meteoDim: $('f-dim').value.trim(), lune: $('f-lune').value.trim(), soleil: $('f-soleil').value.trim(),
     annonces: $('f-pa').value.split('\n').map(s => s.trim()).filter(Boolean)

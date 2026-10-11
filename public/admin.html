@@ -53,19 +53,21 @@
       <label class="l2"><small>Changer la taille garde les cases noires déjà posées en haut à gauche.</small><button class="pbtn" id="f-taille" style="align-self:flex-start">Appliquer la taille</button></label>
     </div>
 
-    <p class="k">2. Les cases noires</p>
-    <div class="outils"><span class="msg" style="margin:0">Clique ou glisse sur les cases pour les noircir ou les blanchir.</span><span class="etat" id="ed-compte"></span><button class="pbtn" id="ed-vider">Tout blanchir</button></div>
+    <p class="k">2. La grille</p>
+    <div class="outils">
+      <div class="mode" id="ed-mode"><button class="on" data-m="noir">Cases noires</button><button data-m="def">Définitions</button></div>
+      <label class="sym"><input type="checkbox" id="ed-sym" checked> Symétrie</label>
+      <span class="etat" id="ed-compte"></span><button class="pbtn" id="ed-vider">Tout blanchir</button>
+    </div>
+    <p class="msg" id="ed-aide"></p>
     <div class="ed-wrap">
       <div class="ed-vp"><div class="g ed" id="ed-g"></div></div>
       <div class="defin">
-        <p class="k" style="margin-top:0">3. Les définitions</p>
-        <p class="msg">Une ligne par numéro, comme dans le journal. Les définitions d'une même ligne sont séparées par des points : la 1<sup>re</sup> va au 1<sup>er</sup> mot, la 2<sup>e</sup> au 2<sup>e</sup>…</p>
+        <p class="k" style="margin-top:0">3. Les définitions <span class="etat" id="ed-manque"></span></p>
         <h3 class="rub2 ink">Horizontalement</h3>
-        <textarea class="zone" id="f-h" spellcheck="false" placeholder="1. Ne se fait pas en un jour. Note.&#10;2. Rongeur."></textarea>
-        <div class="verif" id="v-h"></div>
+        <div class="dl" id="d-h"></div>
         <h3 class="rub2 ink">Verticalement</h3>
-        <textarea class="zone" id="f-v" spellcheck="false"></textarea>
-        <div class="verif" id="v-v"></div>
+        <div class="dl" id="d-v"></div>
       </div>
     </div>
 

@@ -1,12 +1,12 @@
 // Le Courrier de la Mare — la grille côté joueur
-import { words, splitDefs, isBlack, INKS } from './shared.js'
+import { words, isBlack, INKS } from './shared.js'
 
 const $ = id => document.getElementById(id)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const gid = location.pathname.split('/').filter(Boolean)[1] || ''
 const MOBILE = matchMedia('(max-width:760px)').matches
 
-let meta, W, byCell = {}, defs = { h: [], v: [] }
+let meta, W, byCell = {}
 let cells = {}, players = {}, scores = {}, feed = [], online = new Set(), others = {}
 let PC = load('cdlm:pc:' + gid) || {}          // crayon de bois : uniquement dans ce navigateur
 let me = load('cdlm:me')
@@ -35,7 +35,7 @@ function apply(st) {
   meta = st.meta; cells = st.cells || {}; players = st.players || {}; scores = st.scores || {}; feed = st.feed || []
   W = words(meta); byCell = {}
   for (const w of [...W.h, ...W.v]) for (const [r, c] of w.cells) (byCell[key(r, c)] ||= {})[w.d] = w
-  defs.h = meta.defsH.map(splitDefs); defs.v = meta.defsV.map(splitDefs)
+  meta.clues = meta.clues || {}
   for (const k of Object.keys(PC)) { const [r, c] = k.split(',').map(Number); if (r >= meta.rows || c >= meta.cols || isBlack(meta, r, c) || cells[k]) delete PC[k] }
 }
 
@@ -72,11 +72,9 @@ function verso() {
 function build() {
   masthead()
   const g = $('g'), R = meta.rows, C = meta.cols
-  g.style.gridTemplateColumns = 'var(--lab) repeat(' + C + ',var(--cs))'
-  let h = '<div></div>'
-  for (let c = 0; c < C; c++) h += '<div class="lab col" data-lc="' + c + '">' + (c + 1) + '</div>'
+  g.style.gridTemplateColumns = 'repeat(' + C + ',var(--cs))'
+  let h = ''
   for (let r = 0; r < R; r++) {
-    h += '<div class="lab row" data-lr="' + r + '">' + (r + 1) + '</div>'
     for (let c = 0; c < C; c++) {
       const cl = ['c']; if (isBlack(meta, r, c)) cl.push('n')
       if (r === 0) cl.push('top'); if (c === 0) cl.push('left'); if (c === C - 1) cl.push('right'); if (r === R - 1) cl.push('bot')
@@ -103,11 +101,12 @@ function setCs() { const g = $('g'); g.style.setProperty('--cs', cs + 'px'); g.s
 function draw(r, c, anim) {
   const e = el[r][c], k = key(r, c), v = cells[k], p = PC[k]
   if (isBlack(meta, r, c)) return
+  const nb = W.nums[k] ? '<b class="num">' + W.nums[k] + '</b>' : ''
   if (v) {
     const pl = players[v.pid] || { name: '?', color: '#24211d' }
-    e.innerHTML = '<i' + (anim ? ' class="st"' : '') + ' title="' + esc(pl.name) + '" style="color:' + pl.color + '">' + v.ch + '</i>'
-  } else if (p) e.innerHTML = '<i class="pc' + (anim ? ' dr' : '') + '" title="Au crayon (toi seul·e le vois)">' + p.toLowerCase() + '</i>'
-  else e.innerHTML = ''
+    e.innerHTML = nb + '<i' + (anim ? ' class="st"' : '') + ' title="' + esc(pl.name) + '" style="color:' + pl.color + '">' + v.ch + '</i>'
+  } else if (p) e.innerHTML = nb + '<i class="pc' + (anim ? ' dr' : '') + '" title="Au crayon (toi seul·e le vois)">' + p.toLowerCase() + '</i>'
+  else e.innerHTML = nb
   const o = others[k]
   if (o) { e.classList.add('o'); e.style.setProperty('--oc', o.color); e.insertAdjacentHTML('beforeend', '<span class="tag">' + esc(o.name) + '</span>') }
   else { e.classList.remove('o') }
@@ -115,7 +114,8 @@ function draw(r, c, anim) {
 
 const wordAt = (r, c, d) => (byCell[key(r, c)] || {})[d]
 const cellsOf = w => w ? w.cells : []
-function defOf(w) { const a = defs[w.d][w.line] || []; return { t: a[w.k] || '—', n: a.length } }
+const defOf = w => meta.clues[w.id] || '—'
+const sensTxt = w => w.n + (w.d === 'h' ? ' horizontal' : ' vertical')
 
 function refresh(scroll = true) {
   document.querySelectorAll('.c.w,.c.s').forEach(e => e.classList.remove('w', 's'))
@@ -130,12 +130,11 @@ function refresh(scroll = true) {
   document.querySelector('[data-lr="' + sel.r + '"]')?.classList.add('on')
   document.querySelector('[data-lc="' + sel.c + '"]')?.classList.add('on')
   if (w) {
-    const d = defOf(w)
-    $('dlabel').textContent = (w.line + 1) + (w.d === 'h' ? ' horizontal' : ' vertical')
-    $('dtext').innerHTML = esc(d.t) + (d.n > 1 ? ' <span style="color:#8a8273">(' + (w.k + 1) + '/' + d.n + ')</span>' : '')
+    $('dlabel').textContent = sensTxt(w)
+    $('dtext').innerHTML = esc(defOf(w)) + ' <span style="color:#8a8273">(' + w.cells.length + ')</span>'
     $('pat').innerHTML = w.cells.map(([r, c]) => { const k = key(r, c), v = cells[k], p = PC[k]; return v ? '<span>' + v.ch + '</span>' : p ? '<span class="pc">' + p.toLowerCase() + '</span>' : '<span></span>' }).join('')
-    const li = (w.d === 'h' ? $('lh') : $('lv')).querySelector('li[data-l="' + w.line + '"]')
-    if (li) { li.classList.add('act'); li.querySelector('span[data-k="' + w.k + '"]')?.classList.add('on'); if (scroll) { const ol = li.parentElement; const t = li.offsetTop - ol.offsetTop; if (t < ol.scrollTop || t > ol.scrollTop + ol.clientHeight - 40) ol.scrollTop = t - 40 } }
+    const li = (w.d === 'h' ? $('lh') : $('lv')).querySelector('li[data-id="' + w.id + '"]')
+    if (li) { li.classList.add('act'); if (scroll) { const ol = li.parentElement; const t = li.offsetTop - ol.offsetTop; if (t < ol.scrollTop || t > ol.scrollTop + ol.clientHeight - 40) ol.scrollTop = t - 40 } }
   } else { $('dlabel').textContent = ''; $('dtext').textContent = 'Case seule'; $('pat').innerHTML = '' }
   if (scroll) focusSel()
   sendCur()
@@ -153,23 +152,14 @@ function patTxt(w) {
   if (!f || w.cells.every(([r, c]) => cells[key(r, c)])) return ''
   return ' <em class="pt">' + w.cells.map(([r, c]) => { const k = key(r, c); return cells[k] ? cells[k].ch : PC[k] ? PC[k].toLowerCase() : '_' }).join('') + '</em>'
 }
-function liHTML(d, i) {
-  const ws_ = W[d].filter(w => w.line === i), a = defs[d][i]
-  const n = Math.max(a.length, ws_.length)
-  let h = '<b>' + (i + 1) + '.</b> '
-  for (let k = 0; k < n; k++) h += '<span data-k="' + k + '">' + esc(a[k] || '—') + (ws_[k] ? patTxt(ws_[k]) : '') + '</span> '
-  return h
+function liHTML(w) {
+  return '<b>' + w.n + '.</b> <span>' + esc(defOf(w)) + '</span> <em class="ln">(' + w.cells.length + ')</em>' + patTxt(w)
 }
 function list(d, ol) {
-  let h = ''
-  const n = d === 'h' ? meta.rows : meta.cols
-  for (let i = 0; i < n; i++) if (W[d].some(w => w.line === i)) h += '<li data-d="' + d + '" data-l="' + i + '">' + liHTML(d, i) + '</li>'
-  ol.innerHTML = h
+  ol.innerHTML = W[d].map(w => '<li data-id="' + w.id + '">' + liHTML(w) + '</li>').join('')
   ol.onclick = e => {
     const li = e.target.closest('li'); if (!li) return
-    const sp = e.target.closest('span[data-k]'), k = sp ? +sp.dataset.k : 0
-    const w = W[d].filter(x => x.line === +li.dataset.l)[k] || W[d].find(x => x.line === +li.dataset.l)
-    if (!w) return
+    const w = W.byId[li.dataset.id]; if (!w) return
     const empty = w.cells.find(([r, c]) => !cells[key(r, c)]) || w.cells[0]
     sel = { r: empty[0], c: empty[1], d }
     refresh(); kbFocus()
@@ -177,7 +167,7 @@ function list(d, ol) {
   }
 }
 function updLines(r, c) {
-  for (const [d, i, ol] of [['h', r, $('lh')], ['v', c, $('lv')]]) { const li = ol.querySelector('li[data-l="' + i + '"]'); if (li) li.innerHTML = liHTML(d, i) }
+  for (const w of Object.values(byCell[key(r, c)] || {})) { const li = document.querySelector('li[data-id="' + w.id + '"]'); if (li) li.innerHTML = liHTML(w) }
 }
 
 // ---------- saisie ----------
@@ -287,7 +277,7 @@ function ranking() {
   $('moiici').innerHTML = me ? 'Tu écris en <b style="color:' + me.color + '">' + esc(me.name) + '</b>. <button id="renom">Changer</button>' : ''
   const b = $('renom'); if (b) b.onclick = accueil
 }
-const sens = id => { const [d, l] = id.split('-'); return (+l + 1) + (d === 'h' ? ' horizontal' : ' vertical') }
+const sens = id => W.byId[id] ? sensTxt(W.byId[id]) : (id[0] === 'h' ? 'horizontal' : 'vertical')
 function fil(newest) {
   $('fil').innerHTML = feed.slice(0, 3).map((f, i) => { const p = players[f.pid] || { name: '?', color: '#24211d' }; return '<p' + (i === 0 && newest ? ' class="new"' : '') + '><b style="color:' + p.color + '">' + esc(p.name) + '</b> a trouvé ' + esc(f.word) + ' en ' + sens(f.id) + '.</p>' }).join('')
 }

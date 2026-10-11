@@ -3,9 +3,10 @@ const B = 'http://localhost:8787'
 const R = 12, C = 14
 let s = 7; const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280 }
 let bl = ''; for (let i = 0; i < R * C; i++) bl += rnd() < .16 ? '1' : '0'
-const defsH = Array.from({ length: R }, (_, i) => (i + 1) + '. Petit cours. Gros chat. Sur la portée. Fin de série.')
-const defsV = Array.from({ length: C }, (_, i) => 'Bien arrosé. Mot d’enfant. Coin de campagne.')
-const meta = await (await fetch(B + '/api/admin/test/grids', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rows: R, cols: C, blacks: bl, defsH, defsV, source: 'Ouest-France', date: '2026-10-11', saint: 'Firmin', meteoSam: 'Averses, 11°', meteoDim: 'Éclaircies, 14°', soleil: '8 h 07 – 19 h 08', annonces: ['Vends paille. 25 francs les 12 brins.', 'Crapaud cherche princesse. S’adresser à la mare.'] }) })).json()
+import { words as _w } from '../public/js/shared.js'
+const _W = _w({ rows: R, cols: C, blacks: bl }), clues = {}
+for (const w of [..._W.h, ..._W.v]) clues[w.id] = w.d === 'h' ? 'Petit cours d’eau (' + w.n + ')' : 'Bien arrosé, ' + w.n
+const meta = await (await fetch(B + '/api/admin/test/grids', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rows: R, cols: C, blacks: bl, clues, source: 'Ouest-France', date: '2026-10-11', saint: 'Firmin', meteoSam: 'Averses, 11°', meteoDim: 'Éclaircies, 14°', soleil: '8 h 07 – 19 h 08', annonces: ['Vends paille. 25 francs les 12 brins.', 'Crapaud cherche princesse. S’adresser à la mare.'] }) })).json()
 console.log('grille', meta.id)
 const br = await chromium.launch({ executablePath: '/usr/local/bin/chromium', args: ['--no-sandbox'] })
 const errs = []

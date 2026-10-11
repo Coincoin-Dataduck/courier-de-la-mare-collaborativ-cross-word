@@ -1,7 +1,7 @@
 // Test : un mot trouvé puis corrigé perd son point
 import WebSocket from 'ws'
 const B = 'http://localhost:8787'
-const meta = await (await fetch(B + '/api/admin/test/grids', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rows: 3, cols: 3, blacks: '000111111', defsH: ['Animal.'], defsV: [] }) })).json()
+const meta = await (await fetch(B + '/api/admin/test/grids', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ rows: 3, cols: 3, blacks: '000111111', clues: { 'h-0-0': 'Animal.' } }) })).json()
 const st = () => fetch(B + '/api/g/' + meta.id + '/state').then(r => r.json())
 const msgs = []
 const ws = new WebSocket('ws://localhost:8787/api/g/' + meta.id + '/ws')

@@ -8,12 +8,13 @@ const ID_RE = /^[a-z0-9]{8}$/
 
 function page(env, req, file, status = 200) {
   const u = new URL(req.url); u.pathname = file; u.search = ''
-  return env.ASSETS.fetch(new Request(u.toString(), { headers: req.headers })).then(r => status === 200 ? r : new Response(r.body, { status, headers: r.headers }))
+  return env.ASSETS.fetch(new Request(u.toString())).then(r => new Response(r.body, { status: r.ok ? status : r.status, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } }))
 }
 const registry = env => env.REGISTRY.get(env.REGISTRY.idFromName('registry'))
 const grid = (env, id) => env.GRID.get(env.GRID.idFromName(id))
 function isAdmin(env, secret) {
-  const s = env.ADMIN_SECRET || ''
+  try { secret = decodeURIComponent(secret || '') } catch { return false }
+  const s = (env.ADMIN_SECRET || '').trim()
   if (!s || !secret || secret.length !== s.length) return false
   let d = 0; for (let i = 0; i < s.length; i++) d |= s.charCodeAt(i) ^ secret.charCodeAt(i)
   return d === 0

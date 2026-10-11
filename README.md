@@ -59,3 +59,16 @@ Crée un fichier `.dev.vars` avec `ADMIN_SECRET=test`, puis ouvre `http://localh
 - On ne vérifie pas les réponses (personne ne les connaît).
 - Quelqu'un qui connaît le lien d'une grille peut y jouer. Le lien est assez long pour ne pas être deviné.
 - Changer le nom ou la couleur se fait avec « Changer » sous le classement.
+
+## Numérotation et saisie d'une grille (version 2)
+
+- **Un numéro par mot**, comme dans Libé ou Le Monde : chaque case qui commence un mot porte un petit numéro, calculé tout seul de gauche à droite puis de haut en bas. Un même numéro peut servir à un horizontal et à un vertical.
+- **Cases noires** : mode « Cases noires », clique ou glisse. La case **symétrique** (demi-tour) se noircit en même temps ; décoche « Symétrie » pour les grilles qui n'en ont pas.
+- **Définitions** : mode « Définitions ». Clique une case (un 2ᵉ clic passe d'horizontal à vertical) ou directement une ligne de la liste, tape la définition, **Entrée** passe au mot suivant. Le compteur indique les mots sans définition.
+- Une définition reste attachée à la case de départ de son mot : déplacer une case noire ailleurs ne la perd pas.
+
+## Mettre à jour le code sans perdre les grilles
+
+Les grilles et les lettres vivent dans le stockage Cloudflare (Durable Objects), pas dans le code. Pousser une nouvelle version sur GitHub ne les efface pas. Seule règle : ne jamais supprimer ni renommer les blocs `durable_objects` et `migrations` de `wrangler.toml`.
+
+Attention : cette version change le format des définitions. Les grilles d'essai créées avec l'ancienne version s'affichent sans définitions : supprime-les et recrée-les.

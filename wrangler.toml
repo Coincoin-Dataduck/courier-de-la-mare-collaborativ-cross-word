@@ -8,6 +8,8 @@ binding = "ASSETS"
 # les adresses /g/..., /admin/... et /api/... passent par le Worker
 run_worker_first = ["/g/*", "/admin/*", "/api/*", "/"]
 not_found_handling = "404-page"
+# sert admin.html / grille.html tels quels, sans redirection
+html_handling = "none"
 
 [[durable_objects.bindings]]
 name = "GRID"
