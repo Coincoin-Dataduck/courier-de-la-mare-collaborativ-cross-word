@@ -300,11 +300,22 @@ function accueil() {
   const draw_ = () => { $('encres').innerHTML = INKS.map(c => '<button type="button" aria-label="Encre" class="' + (c === color ? 'on' : '') + '" style="background:' + c + '" data-c="' + c + '"></button>').join(''); nom.style.color = color }
   draw_()
   $('encres').onclick = e => { const b = e.target.closest('button'); if (b) { color = b.dataset.c; draw_() } }
-  const ok = () => { go.disabled = !nom.value.trim() }
+  const dbl = $('doublon')
+  const ok = () => { go.disabled = !nom.value.trim(); dbl.classList.add('hide') }
   nom.oninput = ok; ok()
   nom.onkeydown = e => { if (e.key === 'Enter' && !go.disabled) go.click() }
   go.onclick = () => {
     const name = nom.value.replace(/\s+/g, ' ').trim().slice(0, 24); if (!name) return
+    // même pseudo déjà sur cette grille (autre appareil ?) : on demande avant de créer un 2e joueur
+    const same = Object.entries(players).find(([p, x]) => p !== (me && me.pid) && simp(x.name) === simp(name))
+    if (same) {
+      const [pid, x] = same
+      $('doublon-q').innerHTML = 'Il y a déjà un·e <b style="color:' + x.color + '">' + esc(x.name) + '</b> sur cette grille. C’est toi ?'
+      $('d-btns').classList.remove('hide'); dbl.classList.remove('hide'); go.disabled = true
+      $('d-oui').onclick = () => { me = { pid, name: x.name, color: x.color }; save('cdlm:me', me); location.reload() }
+      $('d-non').onclick = () => { $('doublon-q').textContent = 'Choisis un autre nom, alors.'; $('d-btns').classList.add('hide'); nom.select(); nom.focus() }
+      return
+    }
     me = { pid: (me && me.pid) || rid(), name, color }; save('cdlm:me', me)
     v.classList.add('hide')
     if (ws && ws.readyState === 1) send({ t: 'hello', ...me }); else connect()
@@ -312,6 +323,7 @@ function accueil() {
   }
   v.classList.remove('hide'); setTimeout(() => nom.focus(), 50)
 }
+const simp = s => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
 function rid() { const a = new Uint8Array(12); crypto.getRandomValues(a); return [...a].map(x => (x % 36).toString(36)).join('') }
 
 // ---------- temps réel ----------

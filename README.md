@@ -72,3 +72,7 @@ Crée un fichier `.dev.vars` avec `ADMIN_SECRET=test`, puis ouvre `http://localh
 Les grilles et les lettres vivent dans le stockage Cloudflare (Durable Objects), pas dans le code. Pousser une nouvelle version sur GitHub ne les efface pas. Seule règle : ne jamais supprimer ni renommer les blocs `durable_objects` et `migrations` de `wrangler.toml`.
 
 Attention : cette version change le format des définitions. Les grilles d'essai créées avec l'ancienne version s'affichent sans définitions : supprime-les et recrée-les.
+
+## Jouer sur plusieurs appareils
+
+Chaque navigateur a son identifiant de joueur. Si quelqu'un tape un pseudo déjà présent sur la grille (majuscules et accents ignorés), on lui demande « C'est toi ? ». Oui : il reprend le même joueur (points et couleur). Non : il choisit un autre nom. Le crayon reste propre à chaque appareil.

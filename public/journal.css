@@ -232,3 +232,9 @@ body{padding:18px 0 40px}
 .dl p em{font:400 12px/1 Narrow,sans-serif;color:var(--grey);font-style:normal;white-space:nowrap}
 .dl p.vide b{color:#b3261e}
 .dl p.act{background:#e2e9df}
+
+/* même pseudo sur un autre appareil */
+.doublon{margin-top:14px;padding-top:12px;border-top:1px dotted #8a8273;font:400 15px/1.4 Times,serif}
+.doublon p{margin:0 0 10px}
+.doublon #d-btns{display:flex;gap:8px;flex-wrap:wrap}
+.doublon #d-btns.hide{display:none}
