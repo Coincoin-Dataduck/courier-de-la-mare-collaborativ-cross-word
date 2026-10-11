@@ -1,78 +1,76 @@
-# Le Courrier de la Mare — mots croisés à plusieurs
+# Le Courrier de la Mare — collaborative crosswords
 
-Des grilles de mots croisés recopiées du journal, à remplir ensemble, sans compte, en temps réel.
+Crossword grids copied from the newspaper, solved together in real time, with no accounts. The interface is in French; this README is in English.
 
-## Ce qu'il y a dedans
+## What's inside
 
-- `public/` : les pages (grille, rédaction, grille introuvable), le style, les polices.
-- `src/worker.js` : le Worker Cloudflare (les adresses et l'API).
-- `src/grid.js` : une grille = un Durable Object (lettres, joueurs, mots trouvés, temps réel).
-- `src/registry.js` : la liste des grilles.
-- `tools/dev.mjs` : un petit serveur local pour essayer sans Cloudflare.
+- `public/`: the pages (grid, admin "newsroom", grid not found), styles, fonts.
+- `src/worker.js`: the Cloudflare Worker (routes and API).
+- `src/grid.js`: one grid = one Durable Object (letters, players, found words, real time).
+- `src/registry.js`: the list of grids.
+- `tools/dev.mjs`: a small local server to try things without Cloudflare.
 
-## Mettre en ligne (une seule fois)
+## Deploying (once)
 
-Il faut un compte Cloudflare (le plan gratuit suffit) et Node.js 20 ou plus.
+You need a Cloudflare account (the free plan is enough) and Node.js 20+.
 
 ```sh
 npm install
 npx wrangler login
-npx wrangler secret put ADMIN_SECRET     # tape un secret long, ex. Qm8r-2xVt-91Lp
+npx wrangler secret put ADMIN_SECRET     # a long secret, letters, digits and hyphens only, e.g. Qm8r-2xVt-91Lp
 npx wrangler deploy
 ```
 
-Wrangler affiche l'adresse du site, du genre `https://courrier-de-la-mare.<toi>.workers.dev`.
+Wrangler prints the site address, something like `https://courrier-de-la-mare.<you>.workers.dev`.
 
-- La salle de rédaction : `https://…/admin/<ton secret>`
-- Une grille : `https://…/g/<identifiant>` (le lien est donné dans la rédaction)
+- Admin: `https://…/admin/<your secret>`
+- A grid: `https://…/g/<id>` (the link is shown in the admin)
 
-Pour une mise à jour : `npx wrangler deploy` à nouveau. Les grilles ne sont pas touchées.
+You can also connect the GitHub repository in the Cloudflare dashboard (Workers & Pages → Create → Import a repository, deploy command `npx wrangler deploy`) so every push redeploys automatically. Set `ADMIN_SECRET` under Settings → Variables and Secrets, as a Secret.
 
-Nom de domaine à toi : dans le tableau de bord Cloudflare, Workers → courrier-de-la-mare → Settings → Domains & Routes.
+Custom domain: Cloudflare dashboard → Workers → courrier-de-la-mare → Settings → Domains & Routes.
 
-> Pourquoi un Worker et pas Cloudflare Pages ? Le temps réel passe par des Durable Objects, qui vivent dans un Worker. Le Worker sert aussi les pages statiques : c'est la manière actuelle recommandée par Cloudflare, et ça reste gratuit.
+> Why a Worker and not Cloudflare Pages? Real time relies on Durable Objects, which live in a Worker. The Worker also serves the static pages: this is Cloudflare's currently recommended setup, and it stays free.
 
-## Essayer sur son ordinateur
+## Running locally
 
 ```sh
 npm install
-npx wrangler dev          # le vrai moteur Cloudflare en local
+npx wrangler dev          # the real Cloudflare runtime, locally
 ```
 
-Crée un fichier `.dev.vars` avec `ADMIN_SECRET=test`, puis ouvre `http://localhost:8787/admin/test`.
+Create a `.dev.vars` file with `ADMIN_SECRET=test`, then open `http://localhost:8787/admin/test`.
 
-(Sans Wrangler : `npm i ws` puis `node tools/dev.mjs` lance une imitation simple, secret `test`.)
+(Without Wrangler: `npm i ws` then `node tools/dev.mjs` starts a simple imitation, secret `test`.)
 
-## Les règles du jeu dans le code
+## Updating the code without losing grids
 
-- Les définitions d'une ligne sont séparées par des points (ou `?` `!` `…`). La 1re va au 1er mot de la ligne, la 2e au 2e, etc. Un mot = au moins 2 cases blanches à la suite.
-- Machine à écrire : la lettre est envoyée à tout le monde, dans l'encre du joueur.
-- Crayon de bois : la lettre reste dans le navigateur de la personne. Personne d'autre ne la voit.
-- Un mot est trouvé quand toutes ses lettres sont à la machine. Il compte pour celui ou celle qui pose la dernière lettre.
-- Si on efface ou corrige une lettre d’un mot trouvé, le mot n’est plus trouvé et son point est retiré. Quand le mot est de nouveau complet, il revient à la personne qui pose la dernière lettre.
-- Grille entièrement remplie à la machine : « Tamponné » puis « Double tamponné ».
-- Les grilles n'expirent jamais. On les supprime depuis la rédaction.
-- Pas de compte : chaque navigateur reçoit un identifiant gardé en mémoire, avec le nom et la couleur choisis.
+Grids and letters live in Cloudflare storage (Durable Objects), not in the code. Pushing a new version does not erase them. One rule: never remove or rename the `durable_objects` and `migrations` sections of `wrangler.toml`.
 
-## Limites connues
+## Building a grid (admin)
 
-- On ne vérifie pas les réponses (personne ne les connaît).
-- Quelqu'un qui connaît le lien d'une grille peut y jouer. Le lien est assez long pour ne pas être deviné.
-- Changer le nom ou la couleur se fait avec « Changer » sous le classement.
+- **One number per word**, as in French newspapers: every cell that starts a word gets a small number, computed automatically left to right, top to bottom. An across and a down word can share a number.
+- **Black cells**: "Cases noires" mode, click or drag. The **symmetric** cell (180° rotation) follows; untick "Symétrie" for grids without symmetry.
+- **Clues**: "Définitions" mode. Click a cell (a second click toggles across/down) or a line in the list, type the clue, **Enter** goes to the next word. A counter shows words without a clue.
+- A clue is attached to the start cell of its word, so moving a black cell elsewhere does not lose it.
 
-## Numérotation et saisie d'une grille (version 2)
+## Game rules in the code
 
-- **Un numéro par mot**, comme dans Libé ou Le Monde : chaque case qui commence un mot porte un petit numéro, calculé tout seul de gauche à droite puis de haut en bas. Un même numéro peut servir à un horizontal et à un vertical.
-- **Cases noires** : mode « Cases noires », clique ou glisse. La case **symétrique** (demi-tour) se noircit en même temps ; décoche « Symétrie » pour les grilles qui n'en ont pas.
-- **Définitions** : mode « Définitions ». Clique une case (un 2ᵉ clic passe d'horizontal à vertical) ou directement une ligne de la liste, tape la définition, **Entrée** passe au mot suivant. Le compteur indique les mots sans définition.
-- Une définition reste attachée à la case de départ de son mot : déplacer une case noire ailleurs ne la perd pas.
+- Typewriter ("Machine"): the letter is sent to everyone, in the player's ink.
+- Pencil ("Crayon"): the letter stays in that person's browser. Nobody else sees it.
+- A word is found when all its letters are typed. It goes to whoever places the last letter.
+- Erasing or correcting a letter of a found word un-finds it and removes the point. When complete again, it goes to whoever places the last letter.
+- Grid fully typed: "Tamponné", then "Double tamponné".
+- Grids never expire. They are deleted from the admin.
 
-## Mettre à jour le code sans perdre les grilles
+## Players and devices
 
-Les grilles et les lettres vivent dans le stockage Cloudflare (Durable Objects), pas dans le code. Pousser une nouvelle version sur GitHub ne les efface pas. Seule règle : ne jamais supprimer ni renommer les blocs `durable_objects` et `migrations` de `wrangler.toml`.
+- No accounts: each browser gets an id kept in local storage, with the chosen name and ink colour.
+- Name or colour can be changed with "Changer" under the ranking.
+- If someone types a name already used on the grid (case and accents ignored), they are asked "C'est toi ?" ("Is that you?"). Yes: they take over the same player (points and colour), e.g. on a second device. No: they pick another name. Pencil marks stay on each device.
 
-Attention : cette version change le format des définitions. Les grilles d'essai créées avec l'ancienne version s'affichent sans définitions : supprime-les et recrée-les.
+## Known limits
 
-## Jouer sur plusieurs appareils
-
-Chaque navigateur a son identifiant de joueur. Si quelqu'un tape un pseudo déjà présent sur la grille (majuscules et accents ignorés), on lui demande « C'est toi ? ». Oui : il reprend le même joueur (points et couleur). Non : il choisit un autre nom. Le crayon reste propre à chaque appareil.
+- Answers are not checked (nobody knows them).
+- Anyone with a grid link can play. Links are long enough not to be guessed.
+- Without accounts, anyone can claim an existing name on a grid. Fine among friends.

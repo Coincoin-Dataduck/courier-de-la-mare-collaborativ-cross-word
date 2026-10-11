@@ -1,5 +1,5 @@
 // Logique partagée serveur / navigateur
-export const INKS = ['#1e3f8a', '#a8241c', '#2b6a3a', '#6a3c9c', '#8a5208', '#0f6670', '#a3295f', '#3d3a35', '#5b6b1a', '#b0461b']
+export const INKS = ['#1e3f8a', '#a8241c', '#2b6a3a', '#6a3c9c', '#8a5208', '#0f6670', '#a3295f', '#3d3a35', '#5b6b1a', '#b0461b', '#a07c00']
 
 // blacks : chaîne de rows*cols caractères, '1' = case noire
 export function isBlack(meta, r, c) { return meta.blacks[r * meta.cols + c] === '1' }
