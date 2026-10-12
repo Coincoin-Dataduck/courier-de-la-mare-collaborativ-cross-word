@@ -10,6 +10,7 @@ let meta, W, byCell = {}
 let cells = {}, players = {}, scores = {}, feed = [], online = new Set(), others = {}
 let PC = load('cdlm:pc:' + gid) || {}          // crayon de bois : uniquement dans ce navigateur
 let me = load('cdlm:me')
+let abandon = null, foundSet = new Set()
 let sel = null, mode = 'ink', ws = null, wsTry = 0, cs = 18, el = [], done = false
 
 function load(k) { try { return JSON.parse(localStorage.getItem(k)) } catch { return null } }
@@ -32,7 +33,7 @@ async function start() {
 function perdu() { $('journal').classList.add('hide'); $('accueil').classList.add('hide'); $('perdu').classList.remove('hide'); document.title = 'Grille introuvable — Le Courrier de la Mare' }
 
 function apply(st) {
-  meta = st.meta; cells = st.cells || {}; players = st.players || {}; scores = st.scores || {}; feed = st.feed || []
+  meta = st.meta; abandon = st.abandon || null; foundSet = new Set(st.foundIds || []); cells = st.cells || {}; players = st.players || {}; scores = st.scores || {}; feed = st.feed || []
   W = words(meta); byCell = {}
   for (const w of [...W.h, ...W.v]) for (const [r, c] of w.cells) (byCell[key(r, c)] ||= {})[w.d] = w
   meta.clues = meta.clues || {}
@@ -193,7 +194,7 @@ function nextWord(dir) {
   const x = all[i]; sel = { r: x.cells[0][0], c: x.cells[0][1], d: x.d }; refresh()
 }
 function type(ch) {
-  if (!sel || !me) return
+  if (!sel || !me || abandon) return
   const k = key(sel.r, sel.c)
   if (mode === 'pc') {
     if (cells[k]) { step(1); refresh(); return } // on n'écrit pas au crayon par-dessus la machine
@@ -208,7 +209,7 @@ function type(ch) {
   step(1); refresh()
 }
 function erase(back) {
-  if (!sel) return
+  if (!sel || abandon) return
   let k = key(sel.r, sel.c)
   if (back && !cells[k] && !PC[k]) { step(-1); k = key(sel.r, sel.c) }
   if (PC[k] && (mode === 'pc' || !cells[k])) { delete PC[k]; save('cdlm:pc:' + gid, PC) }
@@ -287,9 +288,11 @@ function progress(anim) {
   for (let r = 0; r < meta.rows; r++) for (let c = 0; c < meta.cols; c++) if (!isBlack(meta, r, c)) { tot++; if (cells[key(r, c)]) ink++ }
   const pct = tot ? Math.floor(ink * 100 / tot) : 0
   $('avance').textContent = pct + ' % de la grille est rempli.'
-  const fin = tot > 0 && ink === tot
-  if (fin && !done) { const t = $('tampons'); if (!anim) t.style.setProperty('--x', 0); t.classList.add('on') }
-  if (!fin) $('tampons').classList.remove('on')
+  // Tous les mots trouvés : double tamponné. Abandonnée par l'admin : tamponné seulement.
+  const nW = W.h.length + W.v.length, dbl = nW > 0 && foundSet.size >= nW, fin = dbl || !!abandon
+  const t = $('tampons'); t.classList.toggle('simple', !dbl)
+  if (fin && !done) { if (!anim) t.style.setProperty('--x', 0); t.classList.add('on') }
+  if (!fin) t.classList.remove('on')
   done = fin
 }
 
@@ -369,8 +372,8 @@ function on(m) {
       break
     }
     case 'del': { delete cells[key(m.r, m.c)]; draw(m.r, m.c); updLines(m.r, m.c); progress(false); if (sel) refresh(false); break }
-    case 'found': { scores[m.pid] = (scores[m.pid] || 0) + 1; feed.unshift({ id: m.id, pid: m.pid, word: m.word, ts: m.ts }); feed = feed.slice(0, 5); ranking(); fil(true); break }
-    case 'unfound': { if (scores[m.pid]) scores[m.pid]--; feed = feed.filter(f => f.id !== m.id); ranking(); fil(false); break }
+    case 'found': { foundSet.add(m.id); progress(true); scores[m.pid] = (scores[m.pid] || 0) + 1; feed.unshift({ id: m.id, pid: m.pid, word: m.word, ts: m.ts }); feed = feed.slice(0, 5); ranking(); fil(true); break }
+    case 'unfound': { foundSet.delete(m.id); progress(false); if (scores[m.pid]) scores[m.pid]--; feed = feed.filter(f => f.id !== m.id); ranking(); fil(false); break }
     case 'player': { players[m.pid] = { name: m.name, color: m.color }; ranking(); for (const [k, o] of Object.entries(others)) if (o.pid === m.pid) { const [a, b] = k.split(',').map(Number); moveOther(m.pid, a, b) } break }
     case 'online': { online = new Set(m.pids); ranking(); break }
     case 'leave': { online.delete(m.pid); moveOther(m.pid, null); ranking(); break }

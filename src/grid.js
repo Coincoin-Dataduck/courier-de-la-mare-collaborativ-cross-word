@@ -17,6 +17,8 @@ export class Grid {
     this.cells = Object.fromEntries([...(await st.list({ prefix: 'c:' }))].map(([k, v]) => [k.slice(2), v]))
     this.players = Object.fromEntries([...(await st.list({ prefix: 'p:' }))].map(([k, v]) => [k.slice(2), v]))
     this.found = Object.fromEntries([...(await st.list({ prefix: 'f:' }))].map(([k, v]) => [k.slice(2), v]))
+    this.abandon = (await st.get('abandon')) || null   // date d'abandon (admin) : grille tamponnée, plus d'écriture
+    this.last = (await st.get('last')) || null         // date de la dernière lettre
     this.index()
   }
 
@@ -36,8 +38,35 @@ export class Grid {
 
   state() {
     const feed = Object.entries(this.found).map(([id, f]) => ({ id, ...f })).sort((a, b) => b.ts - a.ts).slice(0, 5)
-    return { meta: this.meta, cells: this.cells, players: this.players, scores: this.scores(), feed, foundIds: Object.keys(this.found) }
+    return { meta: this.meta, cells: this.cells, players: this.players, scores: this.scores(), feed, foundIds: Object.keys(this.found), abandon: this.abandon }
   }
+
+  // Résumé pour le kiosque
+  summary() {
+    const m = this.meta, sc = this.scores()
+    let best = null
+    for (const [pid, n] of Object.entries(sc)) if (!best || n > best.n) { const p = this.players[pid] || {}; best = { name: p.name || '?', color: p.color || '#24211d', n } }
+    let filled = '', tot = 0, ink = 0
+    for (let r = 0; r < m.rows; r++) for (let c = 0; c < m.cols; c++) {
+      const k = r + ',' + c, f = this.cells[k] ? '1' : '0'
+      filled += f
+      if (!isBlack(m, r, c)) { tot++; if (f === '1') ink++ }
+    }
+    const who = new Set([...Object.values(this.cells).map(x => x.pid), ...Object.values(this.found).map(x => x.pid)])
+    const nw = (this.words || []).length, nf = Object.keys(this.found).length
+    const last = this.last || Math.max(0, ...Object.values(this.found).map(f => f.ts || 0)) || null
+    const fin = nw > 0 && nf >= nw ? 'double' : this.abandon ? 'simple' : null
+    return { id: m.id, numero: m.numero, rows: m.rows, cols: m.cols, blacks: m.blacks, filled, pct: tot ? Math.floor(ink * 100 / tot) : 0, players: who.size, best, last, fin, abandon: this.abandon }
+  }
+  registry() { return this.env.REGISTRY.get(this.env.REGISTRY.idFromName('registry')) }
+  async push() { try { await this.registry().fetch('https://do/sum', { method: 'POST', body: JSON.stringify(this.summary()) }) } catch {} }
+  // On prévient le kiosque quelques secondes après une modification (pas à chaque lettre)
+  async touch() {
+    const st = this.ctx.storage
+    if (typeof st.setAlarm !== 'function') return this.push()
+    if (!(await st.getAlarm())) await st.setAlarm(Date.now() + 4000)
+  }
+  async alarm() { await this.ready; if (this.meta) await this.push() }
 
   async fetch(req) {
     await this.ready
@@ -63,12 +92,21 @@ export class Grid {
         if (del.length) await st.delete(del)
       } else this.index()
       this.broadcast({ t: 'reload' })
+      await this.push()
       return json(m)
     }
 
     if (!this.meta) return json({ error: 'introuvable' }, 404)
 
     if (url.pathname === '/state') return json(this.state())
+    if (url.pathname === '/summary') return json(this.summary())
+    if (url.pathname === '/abandon' && req.method === 'POST') {
+      const { on } = await req.json().catch(() => ({}))
+      if (on) { this.abandon = Date.now(); await st.put('abandon', this.abandon) } else { this.abandon = null; await st.delete('abandon') }
+      this.broadcast({ t: 'reload' })
+      await this.push()
+      return json(this.summary())
+    }
     if (url.pathname === '/admin') {
       const total = this.meta.blacks.split('').filter(x => x === '0').length
       return json({ meta: this.meta, filled: Object.keys(this.cells).length, total, players: Object.keys(this.players).length })
@@ -77,8 +115,9 @@ export class Grid {
     if (url.pathname === '/' && req.method === 'DELETE') {
       this.broadcast({ t: 'deleted' })
       for (const ws of this.ctx.getWebSockets()) try { ws.close(4004, 'grille supprimée') } catch {}
+      if (typeof st.deleteAlarm === 'function') await st.deleteAlarm()
       await st.deleteAll()
-      this.meta = null; this.cells = {}; this.players = {}; this.found = {}; this.index()
+      this.meta = null; this.cells = {}; this.players = {}; this.found = {}; this.abandon = null; this.last = null; this.index()
       return json({ ok: true })
     }
 
@@ -116,6 +155,7 @@ export class Grid {
         this.players[pid] = { name, color }
         await st.put('p:' + pid, this.players[pid])
         this.broadcast({ t: 'player', pid, name, color })
+        await this.touch()
       }
       ws.send(JSON.stringify({ t: 'online', pids: this.online() }))
       this.broadcast({ t: 'online', pids: this.online() }, ws)
@@ -134,6 +174,8 @@ export class Grid {
       return
     }
 
+    if (this.abandon && (m.t === 'put' || m.t === 'del')) return
+
     if (m.t === 'put') {
       const ch = String(m.ch || '').toUpperCase()
       if (!inside || !LETTER.test(ch)) return
@@ -142,6 +184,7 @@ export class Grid {
       this.cells[k] = { ch, pid }
       await st.put('c:' + k, this.cells[k])
       this.broadcast({ t: 'put', r, c, ch, pid })
+      this.last = Date.now(); await st.put('last', this.last)
       // Une lettre corrigée : les mots qui passaient par là ne sont plus acquis
       if (old) await this.revoke(k)
       // Le mot revient à celui ou celle qui pose la dernière lettre
@@ -154,6 +197,7 @@ export class Grid {
         await st.put('f:' + w.id, f)
         this.broadcast({ t: 'found', id: w.id, pid, word, ts: f.ts })
       }
+      await this.touch()
       return
     }
 
@@ -165,6 +209,7 @@ export class Grid {
       await st.delete('c:' + k)
       this.broadcast({ t: 'del', r, c, pid })
       await this.revoke(k)
+      await this.touch()
       return
     }
   }

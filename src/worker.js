@@ -32,6 +32,10 @@ export default {
     if (p[0] === 'g' && p.length === 2) return ID_RE.test(p[1]) ? page(env, req, '/grille.html') : page(env, req, '/introuvable.html', 404)
     if (p[0] === 'admin' && p.length === 2) return isAdmin(env, p[1]) ? page(env, req, '/admin.html') : page(env, req, '/introuvable.html', 404)
 
+    // Le kiosque (public)
+    if (url.pathname === '/') return page(env, req, '/kiosque.html')
+    if (p[0] === 'api' && p[1] === 'kiosque' && p.length === 2) return registry(env).fetch('https://do/kiosque')
+
     // API joueurs
     if (p[0] === 'api' && p[1] === 'g' && ID_RE.test(p[2] || '')) {
       const sub = p[3] === 'ws' ? '/ws' : '/state'
@@ -59,6 +63,7 @@ export default {
         }
       } else if (ID_RE.test(id)) {
         const g = grid(env, id)
+        if (p[5] === 'abandon' && req.method === 'POST') return g.fetch('https://do/abandon', { method: 'POST', body: await req.text() })
         if (req.method === 'GET') return g.fetch('https://do/admin')
         if (req.method === 'PUT') {
           const meta = await req.json()
@@ -77,7 +82,6 @@ export default {
       return json({ error: 'méthode' }, 405)
     }
 
-    if (url.pathname === '/' ) return page(env, req, '/introuvable.html', 404)
     return page(env, req, '/introuvable.html', 404)
   }
 }

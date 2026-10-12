@@ -245,3 +245,54 @@ body{padding:18px 0 40px}
 .defs li.ok>span{color:#8a8273;text-decoration:line-through;text-decoration-color:rgba(36,33,29,.5)}
 .defs li.ok>b,.defs li.ok .ln{color:#a39b8b}
 .defs li.ok .pt i{color:var(--green)}
+
+/* kiosque */
+.kq-back{font:700 12px/1 Narrow,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#2c6a48;text-decoration:none;margin-right:10px}
+.kq-back:hover{text-decoration:underline}
+.mast-a{color:inherit;text-decoration:none}
+.tampons.simple .t2{display:none}
+.st1,.st2{font:700 12px/1 Narrow,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#b3261e;border:2px solid #b3261e;padding:2px 5px}
+.st2{outline:2px solid #b3261e;outline-offset:2px}
+.kq-h{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin:18px 0 6px}
+.kq-h h2{margin:0;font:700 26px/1 Century,serif}
+.flt{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+.flt button{font:700 12px/1 Narrow,sans-serif;letter-spacing:.08em;text-transform:uppercase;background:none;border:1px solid #24211d;color:#24211d;padding:6px 9px;cursor:pointer}
+.flt button.on{background:#24211d;color:#ebe6da}
+.pres{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:34px 26px;padding:22px 6px 30px;border-bottom:3px double #24211d;position:relative}
+.pres::after{content:"";position:absolute;left:0;right:0;bottom:0;height:10px;background:linear-gradient(#6f685d55,transparent)}
+.mu{display:block;position:relative;background:#f1ece1;color:#24211d;text-decoration:none;padding:10px 10px 12px;transform:rotate(var(--r,0deg));box-shadow:0 1px 0 #0002,2px 4px 10px #0003;transition:transform .2s,box-shadow .2s;transform-origin:50% 0}
+.mu:hover,.mu:focus-visible{transform:rotate(0) translateY(-6px);box-shadow:0 1px 0 #0002,4px 12px 20px #0004;outline:none}
+.mu.cours{outline:2px solid #2c6a48;outline-offset:3px}
+.mu .mt{display:flex;justify-content:space-between;font:700 10px/1 Narrow,sans-serif;letter-spacing:.08em;text-transform:uppercase;border-bottom:1px solid #24211d;padding-bottom:4px}
+.mu .mm{font:700 22px/1 Century,serif;text-align:center;padding:6px 0 5px;letter-spacing:-.01em}
+.mu .mb{display:flex;justify-content:space-between;background:#2c6a48;color:#f1ece1;font:700 10px/1 Narrow,sans-serif;letter-spacing:.08em;text-transform:uppercase;padding:4px 6px;margin-bottom:8px}
+.mu .vig{display:flex;justify-content:center}
+.mu .vig svg{width:100%;height:auto;max-height:230px;display:block}
+.mu .bas{margin-top:9px;font:13px/1.35 Times,serif;border-top:1px solid #24211d;padding-top:6px;min-height:58px}
+.mu .bas .pct{font:700 13px/1 Narrow,sans-serif;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:4px}
+.mu .bar{height:4px;background:#d8d1c3;margin:0 0 5px}
+.mu .bar i{display:block;height:100%;background:#2c6a48}
+.mu .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin:0 3px 0 1px;vertical-align:1px}
+.mu .stp{position:absolute;right:-8px;bottom:62px;font:700 15px/1 Narrow,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#b3261e;border:3px solid #b3261e;padding:5px 8px;background:#f1ece1e8;filter:url(#stamp);mix-blend-mode:multiply;transform:rotate(-9deg);text-align:center}
+.mu .stp small{display:block;font-size:10px;letter-spacing:.14em;margin-top:2px}
+.mu .stp.d{outline:3px solid #b3261e;outline-offset:3px}
+.kq-vide{font:italic 17px/1.4 Times,serif;text-align:center;padding:30px 0;color:#6f685d}
+/* on prend le journal du présentoir */
+.mu.pris{transition:transform .22s cubic-bezier(.3,.7,.4,1),box-shadow .22s;transform:perspective(700px) rotateX(10deg) rotate(0) translateY(-22px) scale(1.04);box-shadow:6px 24px 30px #0005;z-index:5}
+.envol{position:fixed;z-index:50;background:#ebe6da;overflow:hidden;box-shadow:8px 30px 50px #0006;transform-origin:50% 0;pointer-events:none}
+.envol>*{transition:opacity .2s}
+.envol.go>*{opacity:0}
+.envol::before{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 40%,#fff6 50%,transparent 60%);background-size:300% 100%;animation:pli .6s ease-out both}
+@keyframes pli{from{background-position:100% 0}to{background-position:0 0}}
+@media (prefers-reduced-motion:reduce){.mu,.mu.pris{transition:none}.envol{display:none}}
+@media (max-width:760px){
+  .pres{grid-template-columns:1fr 1fr;gap:22px 14px;padding:14px 2px 22px}
+  .mu{padding:7px 7px 9px}
+  .mu .mm{font-size:15px}
+  .mu .mt,.mu .mb{font-size:8px}
+  .mu .bas{font-size:11px;min-height:0}
+  .mu .bas .pct{font-size:11px}
+  .mu .stp{font-size:11px;padding:3px 5px;right:-5px;bottom:58px;border-width:2px}
+  .kq-h h2{font-size:21px}
+  .flt{margin-left:0}
+}

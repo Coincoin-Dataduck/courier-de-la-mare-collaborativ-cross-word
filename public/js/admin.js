@@ -33,16 +33,28 @@ async function liste() {
   $('vue-ed').classList.add('hide'); $('vue-liste').classList.remove('hide')
   let gs = []
   try { gs = await api() } catch (e) { $('vide').textContent = 'Impossible de lire la liste : ' + e.message; return }
+  const K = {}
+  try { for (const k of await (await fetch('/api/kiosque')).json()) K[k.id] = k } catch {}
+  const etat = g => { const k = K[g.id] || {}
+    if (k.fin === 'double') return '<span class="st2">Double tamponné</span>'
+    if (k.abandon) return '<span class="st1">Tamponné</span> <button class="pbtn" data-ab="' + g.id + '" data-on="0">Reprendre</button>'
+    return (k.pct || 0) + ' % <button class="pbtn" data-ab="' + g.id + '" data-on="1" data-n="' + g.numero + '">Abandonner</button>' }
   $('cpt').textContent = gs.length + ' grille' + (gs.length > 1 ? 's' : '')
   $('vide').textContent = gs.length ? '' : 'Aucune grille pour l’instant. Le canard attend.'
   $('grilles').innerHTML = gs.map(g => '<tr><td><b>' + g.numero + '</b></td><td>' + fdate(g.date || g.created) + '</td><td class="mob">' + g.rows + ' × ' + g.cols + '</td><td class="mob">' + esc(g.source) + '</td>' +
     '<td><a class="lien" href="/g/' + g.id + '" target="_blank" rel="noopener">' + esc(lien(g.id)) + '</a> <button class="pbtn" data-copy="' + g.id + '">Copier</button></td>' +
+    '<td class="mob" style="white-space:nowrap">' + etat(g) + '</td>' +
     '<td style="text-align:right;white-space:nowrap"><button class="pbtn" data-ed="' + g.id + '">Modifier</button> <button class="pbtn rouge" data-del="' + g.id + '" data-n="' + g.numero + '">Supprimer</button></td></tr>').join('')
 }
 $('grilles').onclick = async e => {
   const b = e.target.closest('button'); if (!b) return
   if (b.dataset.copy) { try { await navigator.clipboard.writeText(lien(b.dataset.copy)); b.textContent = 'Copié' } catch { prompt('Lien à copier', lien(b.dataset.copy)) } setTimeout(() => b.textContent = 'Copier', 1500) }
   if (b.dataset.ed) ouvrir(b.dataset.ed)
+  if (b.dataset.ab) {
+    const on = b.dataset.on === '1'
+    if (on && !confirm('Abandonner la grille n° ' + b.dataset.n + ' ? Elle sera tamponnée (une seule fois) et plus personne ne pourra y écrire. Tu pourras la reprendre.')) return
+    try { await api('/' + b.dataset.ab + '/abandon', { method: 'POST', body: JSON.stringify({ on }) }); liste() } catch (err) { alert(err.message) }
+  }
   if (b.dataset.del) {
     if (!confirm('Supprimer la grille n° ' + b.dataset.n + ' pour de bon ? Les joueurs perdront tout.')) return
     try { await api('/' + b.dataset.del, { method: 'DELETE' }); liste() } catch (err) { alert(err.message) }
