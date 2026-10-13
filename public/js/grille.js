@@ -245,7 +245,7 @@ kb.addEventListener('input', () => { const v = norm(kb.value); kb.value = ''; fo
 kb.addEventListener('beforeinput', e => { if (e.inputType === 'deleteContentBackward') { e.preventDefault(); erase(true) } })
 
 // outil
-function setMode(m) { mode = m; $('m-ink').classList.toggle('on', m === 'ink'); $('m-pc').classList.toggle('on', m === 'pc'); kbFocus() }
+function setMode(m) { mode = m; $('m-ink').classList.toggle('on', m === 'ink'); $('m-pc').classList.toggle('on', m === 'pc'); kbFocus(); clavSkin(true) }
 $('m-ink').onclick = () => setMode('ink'); $('m-pc').onclick = () => setMode('pc')
 
 // zoom au doigt (téléphone uniquement)
@@ -488,8 +488,8 @@ var clav = localStorage.getItem('cdlm:kb') !== 'tel'
   for (const row of ['AZERTYUIOP', 'QSDFGHJKLM', 'WXCVBN#']) {
     const r = document.createElement('div'); r.className = 'rg'
     for (const ch of row) {
-      const b = document.createElement('button'); b.type = 'button'; b.textContent = ch
-      if (ch === '#') { b.className = 'del'; b.textContent = 'Effacer' }
+      const b = document.createElement('button'); b.type = 'button'; b.innerHTML = '<span></span>'; b.firstChild.textContent = ch
+      if (ch === '#') { b.className = 'del'; b.setAttribute('aria-label', 'Effacer') }
       b.addEventListener('pointerdown', e => {
         e.preventDefault(); b.classList.add('app'); setTimeout(() => b.classList.remove('app'), 110)
         if (navigator.vibrate) navigator.vibrate(6)
@@ -499,7 +499,7 @@ var clav = localStorage.getItem('cdlm:kb') !== 'tel'
     }
     k.appendChild(r)
   }
-  colG.appendChild(k)
+  colG.appendChild(k); clavSkin(false)
   const maj = () => { document.body.classList.toggle('clav-on', clav); $('j-clav').classList.toggle('on', !clav) }
   maj()
   $('j-clav').onclick = () => {
@@ -507,4 +507,14 @@ var clav = localStorage.getItem('cdlm:kb') !== 'tel'
     if (clav) kb.blur(); else kbFocus()
     setTimeout(() => { fitJeu(); placer(); centrer(); majTout() }, 200)
   }
+}
+
+// l'habillage du clavier suit l'outil : touches rondes (Machine) ou carnet (Crayon)
+function clavSkin(anim) {
+  const k = document.getElementById('clav'); if (!k) return
+  const pc = mode === 'pc'
+  k.classList.toggle('crayon', pc); k.classList.toggle('machine', !pc)
+  k.querySelector('.del span').textContent = pc ? '' : 'Corriger'
+  if (!anim || !k.offsetParent) return
+  k.querySelectorAll('button').forEach((b, i) => { b.classList.remove('vague'); void b.offsetWidth; b.style.animationDelay = i * 5 + 'ms'; b.classList.add('vague') })
 }
