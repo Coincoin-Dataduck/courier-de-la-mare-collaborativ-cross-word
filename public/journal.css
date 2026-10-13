@@ -377,3 +377,8 @@ em.arv{color:#b3261e;font-style:normal}
 .ctoast.on{opacity:1;transform:translate(-50%,0)}
 .ctoast b{font:700 11px Narrow,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#e7a39d;margin-right:8px;font-style:normal}
 body.clav-on .ctoast{bottom:230px}
+
+/* boutons des mots cassés : sous le texte, jamais coupés */
+.defbar:has(.conflit.on){flex-wrap:wrap}
+.defbar .conflit{flex:1 0 100%;order:9}
+@media (max-width:760px){body.enjeu .defbar:has(.conflit.on){flex-wrap:wrap;row-gap:6px}body.enjeu .conflit{margin-top:0}body.enjeu .conflit button{padding:9px 6px}}

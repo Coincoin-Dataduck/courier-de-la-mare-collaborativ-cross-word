@@ -156,7 +156,7 @@ function refresh(scroll = true) {
     $('dlabel').innerHTML = esc(sensTxt(w)) + (arv ? '<em class="arv"> · à revoir</em>' : '')
     let cf = $('conflit')
     if (!cf) {
-      $('pat').insertAdjacentHTML('afterend', '<div class="conflit" id="conflit"><button type="button" class="p" id="cf-re">Remettre</button><button type="button" id="cf-ef">Effacer le reste</button></div>')
+      $('defbar').insertAdjacentHTML('beforeend', '<div class="conflit" id="conflit"><button type="button" class="p" id="cf-re">Remettre</button><button type="button" id="cf-ef">Effacer le reste</button></div>')
       cf = $('conflit')
       const act = t => e => { e.preventDefault(); const x = cf.dataset.id; if (x && revoir[x]) send({ t, id: x }); kbFocus() }
       $('cf-re').onclick = act('remettre'); $('cf-ef').onclick = act('nettoyer')
@@ -510,7 +510,7 @@ colG.addEventListener('mousedown', e => { if (enJeu && !e.target.closest('input'
 // bandeau : toucher = changer de sens, glisser = mot suivant / précédent
 {
   const d = $('defbar'); let t0 = null
-  d.addEventListener('touchstart', e => { if (!enJeu || e.target.closest('.mode')) { t0 = null; return } const t = e.touches[0]; t0 = { x: t.clientX, y: t.clientY } }, { passive: true })
+  d.addEventListener('touchstart', e => { if (!enJeu || e.target.closest('.mode, .conflit')) { t0 = null; return } const t = e.touches[0]; t0 = { x: t.clientX, y: t.clientY } }, { passive: true })
   d.addEventListener('touchend', e => {
     if (!t0) return
     const t = e.changedTouches[0], dx = t.clientX - t0.x, dy = t.clientY - t0.y; t0 = null
