@@ -382,3 +382,15 @@ body.clav-on .ctoast{bottom:230px}
 .defbar:has(.conflit.on){flex-wrap:wrap}
 .defbar .conflit{flex:1 0 100%;order:9}
 @media (max-width:760px){body.enjeu .defbar:has(.conflit.on){flex-wrap:wrap;row-gap:6px}body.enjeu .conflit{margin-top:0}body.enjeu .conflit button{padding:9px 6px}}
+
+/* mots corrigés */
+.g .c.cg::after{content:'';position:absolute;left:12%;right:12%;bottom:9%;border-bottom:2px dotted #8a5208;pointer-events:none}
+.dlabel em.acg{font-style:normal;color:#8a5208}
+.pat span.qx{color:#8a5208;border-bottom-color:#8a5208}
+.ctoast b.oc,.fil .oc{color:#8a5208}.ctoast b.oc{color:#e8c27a}
+.alerte{display:none;align-items:center;gap:8px;background:#f3dcd6;border:1px solid #b3261e;padding:6px 8px;margin-top:6px;flex:1 0 100%;order:10}
+.alerte.on{display:flex}
+.alerte p{flex:1;margin:0;font:italic 14px/1.25 Century,serif;color:#24211d}.alerte p b{font-style:normal}
+.alerte button{border:1px solid #24211d;background:#24211d;color:#ebe6da;padding:8px 10px;font:700 11px Narrow,sans-serif;letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
+.defbar:has(.alerte.on){flex-wrap:wrap}
+.fil{max-height:9.6em;overflow-y:auto;overscroll-behavior:contain}
