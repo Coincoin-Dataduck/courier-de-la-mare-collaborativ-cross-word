@@ -10,7 +10,7 @@ let meta, W, byCell = {}
 let cells = {}, players = {}, scores = {}, feed = [], online = new Set(), others = {}
 let PC = load('cdlm:pc:' + gid) || {}          // crayon de bois : uniquement dans ce navigateur
 let me = load('cdlm:me')
-let abandon = null, foundSet = new Set()
+let abandon = null, foundSet = new Set(), revoir = {}, ratures = {}
 let sel = null, mode = 'ink', ws = null, wsTry = 0, cs = 18, el = [], done = false
 
 function load(k) { try { return JSON.parse(localStorage.getItem(k)) } catch { return null } }
@@ -33,7 +33,7 @@ async function start() {
 function perdu() { $('journal').classList.add('hide'); $('accueil').classList.add('hide'); $('perdu').classList.remove('hide'); document.title = 'Grille introuvable — Le Courrier de la Mare' }
 
 function apply(st) {
-  meta = st.meta; abandon = st.abandon || null; foundSet = new Set(st.foundIds || []); cells = st.cells || {}; players = st.players || {}; scores = st.scores || {}; feed = st.feed || []
+  meta = st.meta; abandon = st.abandon || null; foundSet = new Set(st.foundIds || []); cells = st.cells || {}; players = st.players || {}; scores = st.scores || {}; feed = st.feed || []; revoir = st.revoir || {}; ratures = st.ratures || {}
   W = words(meta); byCell = {}
   for (const w of [...W.h, ...W.v]) for (const [r, c] of w.cells) (byCell[key(r, c)] ||= {})[w.d] = w
   meta.clues = meta.clues || {}
@@ -108,11 +108,32 @@ function draw(r, c, anim) {
     e.innerHTML = nb + '<i' + (anim ? ' class="st"' : '') + ' title="' + esc(pl.name) + '" style="color:' + pl.color + '">' + v.ch + '</i>'
   } else if (p) e.innerHTML = nb + '<i class="pc' + (anim ? ' dr' : '') + '" title="Au crayon (toi seul·e le vois)">' + p + '</i>'
   else e.innerHTML = nb
+  const ra = ratureDe(k)
+  if (ra) { const pr = players[ra.pid] || { color: '#24211d' }; e.insertAdjacentHTML('beforeend', '<s class="rat" style="color:' + pr.color + '">' + ra.ch + '</s>') }
+  e.classList.toggle('rv', Object.values(byCell[k] || {}).some(w => revoir[w.id]))
   const o = others[k]
   if (o) { e.classList.add('o'); e.style.setProperty('--oc', o.color); e.insertAdjacentHTML('beforeend', '<span class="tag">' + esc(o.name) + '</span>') }
   else { e.classList.remove('o') }
 }
 
+// ---------- mots cassés ----------
+function ratureDe(k) {
+  let best = null
+  for (const [rk, ra] of Object.entries(ratures)) if (rk.slice(rk.indexOf('|') + 1) === k && (!best || ra.ts > best.ts)) best = ra
+  return best
+}
+const okW = w => complet(w) && !revoir[w.id]
+function toast(html) {
+  let t = $('casse-toast')
+  if (!t) { document.body.insertAdjacentHTML('beforeend', '<div id="casse-toast" class="ctoast"></div>'); t = $('casse-toast') }
+  t.innerHTML = html; t.classList.add('on')
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('on'), 4000)
+}
+function majConf() {
+  for (let r = 0; r < meta.rows; r++) for (let c = 0; c < meta.cols; c++) if (!isBlack(meta, r, c)) draw(r, c)
+  document.querySelectorAll('.defs li[data-id]').forEach(li => { const w = W.byId[li.dataset.id]; if (w) { li.innerHTML = liHTML(w); li.classList.toggle('ok', okW(w)) } })
+  if (sel) refresh(false)
+}
 const wordAt = (r, c, d) => (byCell[key(r, c)] || {})[d]
 const cellsOf = w => w ? w.cells : []
 const defOf = w => meta.clues[w.id] || '—'
@@ -131,12 +152,22 @@ function refresh(scroll = true) {
   document.querySelector('[data-lr="' + sel.r + '"]')?.classList.add('on')
   document.querySelector('[data-lc="' + sel.c + '"]')?.classList.add('on')
   if (w) {
-    $('dlabel').textContent = sensTxt(w)
+    const arv = !!revoir[w.id]
+    $('dlabel').innerHTML = esc(sensTxt(w)) + (arv ? '<em class="arv"> · à revoir</em>' : '')
+    let cf = $('conflit')
+    if (!cf) {
+      $('pat').insertAdjacentHTML('afterend', '<div class="conflit" id="conflit"><button type="button" class="p" id="cf-re">Remettre</button><button type="button" id="cf-ef">Effacer le reste</button></div>')
+      cf = $('conflit')
+      const act = t => e => { e.preventDefault(); const x = cf.dataset.id; if (x && revoir[x]) send({ t, id: x }); kbFocus() }
+      $('cf-re').onclick = act('remettre'); $('cf-ef').onclick = act('nettoyer')
+      cf.addEventListener('pointerdown', e => e.preventDefault())
+    }
+    cf.dataset.id = w.id; cf.classList.toggle('on', arv && !abandon)
     $('dtext').innerHTML = esc(defOf(w)) + ' <span style="color:#8a8273">(' + w.cells.length + ')</span>'
-    $('pat').innerHTML = w.cells.map(([r, c]) => { const k = key(r, c), v = cells[k], p = PC[k]; return v ? '<span>' + v.ch + '</span>' : p ? '<span class="pc">' + p + '</span>' : '<span></span>' }).join('')
+    $('pat').innerHTML = w.cells.map(([r, c]) => { const k = key(r, c), v = cells[k], p = PC[k]; return v ? '<span' + (ratures[w.id + '|' + k] ? ' class="rx"' : '') + '>' + v.ch + '</span>' : p ? '<span class="pc">' + p + '</span>' : '<span></span>' }).join('')
     const li = (w.d === 'h' ? $('lh') : $('lv')).querySelector('li[data-id="' + w.id + '"]')
     if (li) { li.classList.add('act'); if (scroll) { const ol = li.parentElement; const t = li.offsetTop - ol.offsetTop; if (t < ol.scrollTop || t > ol.scrollTop + ol.clientHeight - 40) ol.scrollTop = t - 40 } }
-  } else { $('dlabel').textContent = ''; $('dtext').textContent = 'Case seule'; $('pat').innerHTML = '' }
+  } else { $('dlabel').textContent = ''; $('dtext').textContent = 'Case seule'; $('pat').innerHTML = ''; $('conflit')?.classList.remove('on') }
   if (scroll) focusSel()
   sendCur()
 }
@@ -155,10 +186,10 @@ function patTxt(w) {
 }
 const complet = w => w.cells.every(([r, c]) => cells[key(r, c)])
 function liHTML(w) {
-  return '<b>' + w.n + '.</b> <span>' + esc(defOf(w)) + '</span> <em class="ln">(' + w.cells.length + ')</em>' + patTxt(w)
+  return '<b>' + w.n + '.</b> <span>' + esc(defOf(w)) + '</span> <em class="ln">(' + w.cells.length + ')</em>' + patTxt(w) + (revoir[w.id] ? ' <em class="arv">à revoir</em>' : '')
 }
 function list(d, ol) {
-  ol.innerHTML = W[d].map(w => '<li data-id="' + w.id + '"' + (complet(w) ? ' class="ok"' : '') + '>' + liHTML(w) + '</li>').join('')
+  ol.innerHTML = W[d].map(w => '<li data-id="' + w.id + '"' + (okW(w) ? ' class="ok"' : '') + '>' + liHTML(w) + '</li>').join('')
   ol.onclick = e => {
     const li = e.target.closest('li'); if (!li) return
     const w = W.byId[li.dataset.id]; if (!w) return
@@ -169,7 +200,7 @@ function list(d, ol) {
   }
 }
 function updLines(r, c) {
-  for (const w of Object.values(byCell[key(r, c)] || {})) { const li = document.querySelector('li[data-id="' + w.id + '"]'); if (li) { li.innerHTML = liHTML(w); li.classList.toggle('ok', complet(w)) } }
+  for (const w of Object.values(byCell[key(r, c)] || {})) { const li = document.querySelector('li[data-id="' + w.id + '"]'); if (li) { li.innerHTML = liHTML(w); li.classList.toggle('ok', okW(w)) } }
 }
 
 // ---------- saisie ----------
@@ -204,7 +235,7 @@ function type(ch) {
     if (!cells[k] || cells[k].ch !== ch) {
       cells[k] = { ch, pid: me.pid }; delete PC[k]; save('cdlm:pc:' + gid, PC)
       draw(sel.r, sel.c, true); updLines(sel.r, sel.c); progress(true)
-      send({ t: 'put', r: sel.r, c: sel.c, ch })
+      send({ t: 'put', r: sel.r, c: sel.c, ch, d: sel.d })
     }
   }
   step(1); refresh()
@@ -214,7 +245,7 @@ function erase(back) {
   let k = key(sel.r, sel.c)
   if (back && !cells[k] && !PC[k]) { step(-1); k = key(sel.r, sel.c) }
   if (PC[k] && (mode === 'pc' || !cells[k])) { delete PC[k]; save('cdlm:pc:' + gid, PC) }
-  else if (cells[k]) { delete cells[k]; send({ t: 'del', r: sel.r, c: sel.c }); progress(false) }
+  else if (cells[k]) { delete cells[k]; send({ t: 'del', r: sel.r, c: sel.c, d: sel.d }); progress(false) }
   draw(sel.r, sel.c); updLines(sel.r, sel.c); refresh()
 }
 const norm = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/œ/gi, 'OE').replace(/æ/gi, 'AE').toUpperCase().replace(/[^A-Z]/g, '')
@@ -290,7 +321,10 @@ function ranking() {
 }
 const sens = id => W.byId[id] ? sensTxt(W.byId[id]) : (id[0] === 'h' ? 'horizontal' : 'vertical')
 function fil(newest) {
-  $('fil').innerHTML = feed.slice(0, 3).map((f, i) => { const p = players[f.pid] || { name: '?', color: '#24211d' }; return '<p' + (i === 0 && newest ? ' class="new"' : '') + '><b style="color:' + p.color + '">' + esc(p.name) + '</b> a trouvé ' + esc(f.word) + ' en ' + sens(f.id) + '.</p>' }).join('')
+  $('fil').innerHTML = feed.slice(0, 3).map((f, i) => {
+    const cl = i === 0 && newest ? ' class="new"' : ''
+    if (f.t === 'casse') { const p = players[f.by] || { name: '?', color: '#24211d' }; return '<p' + cl + '><b style="color:' + p.color + '">' + esc(p.name) + '</b> a cassé <span class="x">' + sens(f.id) + '</span>' + (f.src ? ' en écrivant ' + sens(f.src) : '') + '.</p>' }
+    const p = players[f.pid] || { name: '?', color: '#24211d' }; return '<p' + cl + '><b style="color:' + p.color + '">' + esc(p.name) + '</b> a trouvé ' + esc(f.word) + ' en ' + sens(f.id) + '.</p>' }).join('')
 }
 function progress(anim) {
   let tot = 0, ink = 0
@@ -383,11 +417,21 @@ function on(m) {
     }
     case 'del': { delete cells[key(m.r, m.c)]; draw(m.r, m.c); updLines(m.r, m.c); progress(false); if (sel) refresh(false); break }
     case 'found': { foundSet.add(m.id); progress(true); scores[m.pid] = (scores[m.pid] || 0) + 1; feed.unshift({ id: m.id, pid: m.pid, word: m.word, ts: m.ts }); feed = feed.slice(0, 5); ranking(); fil(true); break }
-    case 'unfound': { foundSet.delete(m.id); progress(false); if (scores[m.pid]) scores[m.pid]--; feed = feed.filter(f => f.id !== m.id); ranking(); fil(false); break }
+    case 'unfound': { foundSet.delete(m.id); progress(false); if (scores[m.pid]) scores[m.pid]--; feed = feed.filter(f => f.t === 'casse' || f.id !== m.id); ranking(); fil(false); break }
     case 'player': { players[m.pid] = { name: m.name, color: m.color }; ranking(); for (const [k, o] of Object.entries(others)) if (o.pid === m.pid) { const [a, b] = k.split(',').map(Number); moveOther(m.pid, a, b) } break }
     case 'online': { online = new Set(m.pids); ranking(); break }
     case 'leave': { online.delete(m.pid); moveOther(m.pid, null); ranking(); break }
     case 'cur': { if (!me || m.pid !== me.pid) moveOther(m.pid, m.r, m.c); break }
+    case 'conf': {
+      revoir = m.revoir || {}; ratures = m.ratures || {}
+      for (const x of m.casse || []) {
+        feed.unshift(x); feed = feed.slice(0, 5)
+        const p = players[x.by] || { name: '?' }
+        toast('<b>Rature</b>' + esc(p.name) + ' a cassé ' + sens(x.id))
+      }
+      if ((m.casse || []).length) fil(true)
+      majConf(); break
+    }
     case 'reload': { location.reload(); break }
     case 'deleted': { perdu(); break }
   }

@@ -360,3 +360,20 @@ body{padding:18px 0 40px}
   .jbar #j-clav.on{background:#24211d;color:#ebe6da}
   body.enjeu .defbar{border-bottom:0}
 }
+
+/* mots cassés */
+.c s.rat{position:absolute;right:2px;top:1px;font:700 calc(var(--cs)*.34)/1 Century,serif;text-decoration:none;pointer-events:none;z-index:2}
+.c s.rat:after{content:'';position:absolute;left:-2px;right:-2px;top:50%;border-top:1.6px solid var(--red,#b3261e);transform:rotate(-18deg)}
+.c.rv:after{content:'';position:absolute;left:14%;right:14%;bottom:9%;border-bottom:2px dotted #b3261e;pointer-events:none}
+em.arv{color:#b3261e;font-style:normal}
+.defs li em.arv{font:700 11px Narrow,sans-serif;letter-spacing:.08em;text-transform:uppercase}
+.pat span.rx{color:#b3261e;border-bottom:2px dotted #b3261e}
+.conflit{display:none;gap:8px;margin-top:8px}
+.conflit.on{display:flex}
+.conflit button{flex:1;border:1px solid #24211d;background:transparent;color:#24211d;padding:10px 6px;font:700 12px/1 Narrow,sans-serif;letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
+.conflit button.p{background:#24211d;color:#ebe6da}
+.fil .x{color:#b3261e}
+.ctoast{position:fixed;left:50%;bottom:calc(16px + var(--kbh,0px));transform:translate(-50%,20px);opacity:0;pointer-events:none;background:#24211d;color:#ebe6da;padding:9px 14px;font:italic 15px Century,serif;box-shadow:0 3px 0 rgba(0,0,0,.18);z-index:60;transition:.25s;max-width:92vw}
+.ctoast.on{opacity:1;transform:translate(-50%,0)}
+.ctoast b{font:700 11px Narrow,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#e7a39d;margin-right:8px;font-style:normal}
+body.clav-on .ctoast{bottom:230px}

@@ -19,6 +19,13 @@ export class Grid {
     this.found = Object.fromEntries([...(await st.list({ prefix: 'f:' }))].map(([k, v]) => [k.slice(2), v]))
     this.abandon = (await st.get('abandon')) || null   // date d'abandon (admin) : grille tamponnée, plus d'écriture
     this.last = (await st.get('last')) || null         // date de la dernière lettre
+    // Mots cassés : x:<mot> = le mot trouvé mis « à revoir » ; r:<mot>|<case> = la lettre barrée
+    this.revoir = Object.fromEntries([...(await st.list({ prefix: 'x:' }))].map(([k, v]) => [k.slice(2), v]))
+    this.ratures = Object.fromEntries([...(await st.list({ prefix: 'r:' }))].map(([k, v]) => [k.slice(2), v]))
+    // h:<mot> = { ORTHOGRAPHE: pid } : qui a trouvé chaque version du mot en premier
+    this.hist = Object.fromEntries([...(await st.list({ prefix: 'h:' }))].map(([k, v]) => [k.slice(2), v]))
+    for (const [id, f] of Object.entries(this.found)) if (!this.hist[id]) this.hist[id] = { [f.word]: f.pid }
+    this.casses = (await st.get('casses')) || []       // les dernières cassures, pour le fil
     this.index()
   }
 
@@ -37,8 +44,8 @@ export class Grid {
   }
 
   state() {
-    const feed = Object.entries(this.found).map(([id, f]) => ({ id, ...f })).sort((a, b) => b.ts - a.ts).slice(0, 5)
-    return { meta: this.meta, cells: this.cells, players: this.players, scores: this.scores(), feed, foundIds: Object.keys(this.found), abandon: this.abandon }
+    const feed = [...Object.entries(this.found).map(([id, f]) => ({ id, ...f })), ...this.casses].sort((a, b) => b.ts - a.ts).slice(0, 5)
+    return { meta: this.meta, cells: this.cells, players: this.players, scores: this.scores(), feed, foundIds: Object.keys(this.found), abandon: this.abandon, revoir: this.revoir, ratures: this.ratures }
   }
 
   // Résumé pour le kiosque
@@ -89,6 +96,9 @@ export class Grid {
         this.index()
         const ok = new Set(this.words.map(w => w.id + ':' + w.cells.map(x => x.join(',')).join('|')))
         for (const [id, f] of Object.entries(this.found)) if (!ok.has(id + ':' + f.sig)) { delete this.found[id]; del.push('f:' + id) }
+        for (const id of Object.keys(this.revoir)) del.push('x:' + id)
+        for (const id of Object.keys(this.ratures)) del.push('r:' + id)
+        this.revoir = {}; this.ratures = {}
         if (del.length) await st.delete(del)
       } else this.index()
       this.broadcast({ t: 'reload' })
@@ -117,7 +127,7 @@ export class Grid {
       for (const ws of this.ctx.getWebSockets()) try { ws.close(4004, 'grille supprimée') } catch {}
       if (typeof st.deleteAlarm === 'function') await st.deleteAlarm()
       await st.deleteAll()
-      this.meta = null; this.cells = {}; this.players = {}; this.found = {}; this.abandon = null; this.last = null; this.index()
+      this.meta = null; this.cells = {}; this.players = {}; this.found = {}; this.abandon = null; this.last = null; this.revoir = {}; this.ratures = {}; this.hist = {}; this.casses = []; this.index()
       return json({ ok: true })
     }
 
@@ -176,54 +186,141 @@ export class Grid {
 
     if (this.abandon && (m.t === 'put' || m.t === 'del')) return
 
+    const d = m.d === 'v' ? 'v' : 'h'   // le sens dans lequel le joueur écrit
+
     if (m.t === 'put') {
       const ch = String(m.ch || '').toUpperCase()
       if (!inside || !LETTER.test(ch)) return
-      const k = r + ',' + c, old = this.cells[k]
-      if (old && old.ch === ch) return
-      this.cells[k] = { ch, pid }
-      await st.put('c:' + k, this.cells[k])
-      this.broadcast({ t: 'put', r, c, ch, pid })
-      this.last = Date.now(); await st.put('last', this.last)
-      // Une lettre corrigée : les mots qui passaient par là ne sont plus acquis
-      if (old) await this.revoke(k)
-      // Le mot revient à celui ou celle qui pose la dernière lettre
-      for (const w of this.byCell[k] || []) {
-        if (this.found[w.id]) continue
-        if (!w.cells.every(([a, b]) => this.cells[a + ',' + b])) continue
-        const word = w.cells.map(([a, b]) => this.cells[a + ',' + b].ch).join('')
-        const f = { pid, word, ts: Date.now(), sig: w.cells.map(x => x.join(',')).join('|') }
-        this.found[w.id] = f
-        await st.put('f:' + w.id, f)
-        this.broadcast({ t: 'found', id: w.id, pid, word, ts: f.ts })
-      }
-      await this.touch()
+      await this.onEdit(r + ',' + c, ch, pid, pid, d)
       return
     }
 
     if (m.t === 'del') {
       if (!inside) return
-      const k = r + ',' + c
-      if (!this.cells[k]) return
-      delete this.cells[k]
-      await st.delete('c:' + k)
-      this.broadcast({ t: 'del', r, c, pid })
-      await this.revoke(k)
-      await this.touch()
+      await this.onEdit(r + ',' + c, null, pid, pid, d)
+      return
+    }
+
+    // « Remettre » : les lettres barrées reviennent, avec leur auteur d'origine
+    if (m.t === 'remettre') {
+      const id = String(m.id || ''), w = this.wordById(id)
+      if (!w || !this.revoir[id]) return
+      const list = Object.entries(this.ratures).filter(([rk]) => rk.startsWith(id + '|'))
+      for (const [rk, ra] of list) await this.onEdit(rk.slice(id.length + 1), ra.ch, ra.pid, pid, w.d)
+      if (this.revoir[id]) await this.resolve(id)
+      this.sendConf()
+      return
+    }
+
+    // « Effacer le reste » : on enlève les lettres du mot que plus rien ne tient
+    if (m.t === 'nettoyer') {
+      const id = String(m.id || ''), w = this.wordById(id)
+      if (!w || !this.revoir[id]) return
+      await this.resolve(id)
+      for (const [a2, b2] of w.cells) {
+        const k = a2 + ',' + b2
+        if (!this.cells[k]) continue
+        const tenue = (this.byCell[k] || []).some(x => x.id !== id && (this.found[x.id] || this.revoir[x.id]))
+        if (!tenue) await this.onEdit(k, null, pid, pid, w.d)
+      }
+      this.sendConf()
       return
     }
   }
 
-  // On s'est trompé : le mot n'est plus trouvé, le point est retiré
-  async revoke(k) {
-    for (const w of this.byCell[k] || []) {
+  wordById(id) { return (this.words || []).find(w => w.id === id) }
+
+  // Toute modification d'une case passe par ici.
+  // ch = null pour effacer. author = à qui appartient la lettre, actor = qui agit, d = sens d'écriture.
+  async onEdit(k, ch, author, actor, d) {
+    const st = this.ctx.storage, old = this.cells[k], now = Date.now()
+    if (ch ? old && old.ch === ch : !old) return
+    const ws = this.byCell[k] || [], casse = []
+
+    // 1. Les mots « à revoir » qu'on règle
+    for (const w of ws) {
+      if (!this.revoir[w.id]) continue
+      if (w.d === d) { await this.resolve(w.id); continue }         // on le corrige dans son sens : c'est le joueur qui tranche
+      const rk = w.id + '|' + k, ra = this.ratures[rk]
+      if (ra && ch === ra.ch) {                                       // on a remis la lettre barrée
+        delete this.ratures[rk]; await st.delete('r:' + rk)
+        if (!Object.keys(this.ratures).some(x => x.startsWith(w.id + '|'))) await this.resolve(w.id)
+      }
+    }
+
+    // 2. Les mots trouvés qui passaient par là : cassés (autre sens) ou simplement plus complets / corrigés (même sens)
+    for (const w of ws) {
       const f = this.found[w.id]
       if (!f) continue
-      delete this.found[w.id]
-      await this.ctx.storage.delete('f:' + w.id)
+      delete this.found[w.id]; await st.delete('f:' + w.id)
       this.broadcast({ t: 'unfound', id: w.id, pid: f.pid })
+      if (w.d !== d && old) {
+        this.revoir[w.id] = { pid: f.pid, word: f.word, by: actor, ts: now }
+        await st.put('x:' + w.id, this.revoir[w.id])
+        const rk = w.id + '|' + k
+        this.ratures[rk] = { ch: old.ch, pid: old.pid, by: actor, ts: now }
+        await st.put('r:' + rk, this.ratures[rk])
+        const src = ws.find(x => x.d === d)
+        casse.push({ t: 'casse', id: w.id, by: actor, src: src ? src.id : null, ts: now })
+      }
     }
+
+    // 3. La case elle-même
+    if (ch) {
+      this.cells[k] = { ch, pid: author }
+      await st.put('c:' + k, this.cells[k])
+      const [r, c] = k.split(',').map(Number)
+      this.broadcast({ t: 'put', r, c, ch, pid: author })
+    } else {
+      delete this.cells[k]
+      await st.delete('c:' + k)
+      const [r, c] = k.split(',').map(Number)
+      this.broadcast({ t: 'del', r, c, pid: actor })
+    }
+    this.last = now; await st.put('last', this.last)
+
+    // 4. Les mots qui deviennent complets
+    if (ch) for (const w of ws) {
+      if (this.found[w.id] || this.revoir[w.id]) continue
+      if (!w.cells.every(([a, b]) => this.cells[a + ',' + b])) continue
+      await this.complete(w, actor)
+    }
+
+    if (casse.length) {
+      this.casses = [...casse, ...this.casses].slice(0, 10)
+      await st.put('casses', this.casses)
+    }
+    this.sendConf(casse)
+    await this.touch()
   }
+
+  // Un mot complet : s'il a exactement une orthographe déjà trouvée, il revient à celui ou celle qui l'avait trouvée.
+  // Sinon il va à qui pose la dernière lettre.
+  async complete(w, placer) {
+    const st = this.ctx.storage
+    const word = w.cells.map(([a, b]) => this.cells[a + ',' + b].ch).join('')
+    const h = this.hist[w.id] || {}
+    const pid = h[word] && this.players[h[word]] ? h[word] : placer
+    if (!h[word]) {
+      h[word] = pid
+      const ks = Object.keys(h); if (ks.length > 8) delete h[ks[0]]
+      this.hist[w.id] = h; await st.put('h:' + w.id, h)
+    }
+    const f = { pid, word, ts: Date.now(), sig: w.cells.map(x => x.join(',')).join('|') }
+    this.found[w.id] = f
+    await st.put('f:' + w.id, f)
+    this.broadcast({ t: 'found', id: w.id, pid, word, ts: f.ts })
+  }
+
+  // Le mot n'est plus « à revoir » : on retire ses ratures
+  async resolve(id) {
+    const st = this.ctx.storage, del = ['x:' + id]
+    delete this.revoir[id]
+    for (const rk of Object.keys(this.ratures)) if (rk.startsWith(id + '|')) { delete this.ratures[rk]; del.push('r:' + rk) }
+    await st.delete(del)
+  }
+
+  sendConf(casse = []) { this.broadcast({ t: 'conf', revoir: this.revoir, ratures: this.ratures, casse }) }
 
   online() {
     const s = new Set()
