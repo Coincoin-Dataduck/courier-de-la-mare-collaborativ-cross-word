@@ -394,3 +394,15 @@ body.clav-on .ctoast{bottom:230px}
 .alerte button{border:1px solid #24211d;background:#24211d;color:#ebe6da;padding:8px 10px;font:700 11px Narrow,sans-serif;letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
 .defbar:has(.alerte.on){flex-wrap:wrap}
 .fil{max-height:9.6em;overflow-y:auto;overscroll-behavior:contain}
+
+/* lettres « pas sûr » */
+.g .c u.dq{position:absolute;right:6%;bottom:2%;font:700 calc(var(--cs) * .34) Century,serif;text-decoration:none;line-height:1;pointer-events:none}
+.dlabel em.adq,.lst em.adq,li em.adq{font-style:italic;color:#8a5208}.dlabel em.adq{font-style:normal}
+.m-dq{border:1px dashed #24211d;background:transparent;color:#24211d;padding:5px 10px;font:700 11px Narrow,sans-serif;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;line-height:1.1;align-self:center}
+.m-dq small{display:block;font:italic 400 10px Century,serif;letter-spacing:0;text-transform:none;opacity:.75}
+.m-dq.on{border:1px solid #8a5208;background:#8a5208;color:#ebe6da}
+body.enjeu.clav-on .m-dq{display:none}
+body.enjeu .m-dq small{display:none}
+.clav .dqk span{background:#8a5208!important;color:#ebe6da!important}
+.clav .dqk.on span{box-shadow:0 0 0 3px #e8c27a}
+.clav.crayon .dqk{visibility:hidden}

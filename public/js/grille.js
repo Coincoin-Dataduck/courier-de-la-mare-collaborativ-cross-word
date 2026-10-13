@@ -105,7 +105,7 @@ function draw(r, c, anim) {
   const nb = W.nums[k] ? '<b class="num">' + W.nums[k] + '</b>' : ''
   if (v) {
     const pl = players[v.pid] || { name: '?', color: '#24211d' }
-    e.innerHTML = nb + '<i' + (anim ? ' class="st"' : '') + ' title="' + esc(pl.name) + '" style="color:' + pl.color + '">' + v.ch + '</i>'
+    e.innerHTML = nb + '<i' + (anim ? ' class="st"' : '') + ' title="' + esc(pl.name) + (v.dq ? ' (pas sûr)' : '') + '" style="color:' + pl.color + '">' + v.ch + '</i>' + (v.dq ? '<u class="dq" style="color:' + pl.color + '">?</u>' : '')
   } else if (p) e.innerHTML = nb + '<i class="pc' + (anim ? ' dr' : '') + '" title="Au crayon (toi seul·e le vois)">' + p + '</i>'
   else e.innerHTML = nb
   const ra = ratureDe(k)
@@ -120,6 +120,20 @@ function draw(r, c, anim) {
 // ---------- mots cassés ----------
 // Mots corrigés dans leur sens (corriges/qratures) et alerte pour celui qui tape
 var corriges = {}, qratures = {}, owners = {}, alerte = null
+// Lettres « pas sûr » : cells[k].dq ; doutNext = la prochaine lettre tapée sera douteuse
+var doutNext = false
+const doutW = w => w.cells.some(([r, c]) => (cells[key(r, c)] || {}).dq)
+function douter() {
+  if (!sel || !me || abandon || mode === 'pc') return
+  const k = key(sel.r, sel.c), v = cells[k]
+  if (v) { const on = !v.dq; if (on) v.dq = 1; else delete v.dq; send({ t: 'doute', r: sel.r, c: sel.c, on }); draw(sel.r, sel.c); updLines(sel.r, sel.c) }
+  else doutNext = !doutNext
+  refresh(false); kbFocus()
+}
+function majDq() {
+  const v = sel && cells[key(sel.r, sel.c)], on = v ? !!v.dq : doutNext
+  $('m-dq')?.classList.toggle('on', on); document.querySelector('#clav .dqk')?.classList.toggle('on', on)
+}
 function ratureDe(k) {
   let best = null
   for (const [rk, ra] of [...Object.entries(ratures), ...Object.entries(qratures)]) if (rk.slice(rk.indexOf('|') + 1) === k && (!best || ra.ts > best.ts)) best = ra
@@ -156,7 +170,7 @@ function refresh(scroll = true) {
   document.querySelector('[data-lc="' + sel.c + '"]')?.classList.add('on')
   if (w) {
     const arv = !!revoir[w.id], cg = !arv && corriges[w.id]
-    $('dlabel').innerHTML = esc(sensTxt(w)) + (arv ? '<em class="arv"> · à revoir</em>' : cg ? '<em class="acg"> · corrigé par ' + esc((players[cg.by] || { name: '?' }).name) + '</em>' : '')
+    $('dlabel').innerHTML = esc(sensTxt(w)) + (arv ? '<em class="arv"> · à revoir</em>' : cg ? '<em class="acg"> · corrigé par ' + esc((players[cg.by] || { name: '?' }).name) + '</em>' : '') + (doutW(w) ? '<em class="adq"> · un doute</em>' : '')
     let cf = $('conflit')
     if (!cf) {
       $('defbar').insertAdjacentHTML('beforeend', '<div class="conflit" id="conflit"><button type="button" class="p" id="cf-re">Remettre</button><button type="button" id="cf-ef">Effacer le reste</button></div>')
@@ -168,8 +182,7 @@ function refresh(scroll = true) {
     }
     cf.dataset.id = w.id; cf.classList.toggle('on', (arv || !!cg) && !abandon)
     $('cf-ef').textContent = arv ? 'Effacer le reste' : 'C\'est bon'
-    $('cf-ef').style.display = cg && me && cg.by === me.pid ? 'none' : ''
-    majAlerte()
+    majAlerte(); majDq()
     $('dtext').innerHTML = esc(defOf(w)) + ' <span style="color:#8a8273">(' + w.cells.length + ')</span>'
     $('pat').innerHTML = w.cells.map(([r, c]) => { const k = key(r, c), v = cells[k], p = PC[k]; return v ? '<span' + (ratures[w.id + '|' + k] ? ' class="rx"' : qratures[w.id + '|' + k] ? ' class="qx"' : '') + '>' + v.ch + '</span>' : p ? '<span class="pc">' + p + '</span>' : '<span></span>' }).join('')
     const li = (w.d === 'h' ? $('lh') : $('lv')).querySelector('li[data-id="' + w.id + '"]')
@@ -193,7 +206,7 @@ function patTxt(w) {
 }
 const complet = w => w.cells.every(([r, c]) => cells[key(r, c)])
 function liHTML(w) {
-  return '<b>' + w.n + '.</b> <span>' + esc(defOf(w)) + '</span> <em class="ln">(' + w.cells.length + ')</em>' + patTxt(w) + (revoir[w.id] ? ' <em class="arv">à revoir</em>' : '')
+  return '<b>' + w.n + '.</b> <span>' + esc(defOf(w)) + '</span> <em class="ln">(' + w.cells.length + ')</em>' + patTxt(w) + (revoir[w.id] ? ' <em class="arv">à revoir</em>' : doutW(w) ? ' <em class="adq">un doute</em>' : '')
 }
 function list(d, ol) {
   ol.innerHTML = W[d].map(w => '<li data-id="' + w.id + '"' + (okW(w) ? ' class="ok"' : '') + '>' + liHTML(w) + '</li>').join('')
@@ -264,10 +277,14 @@ function type(ch) {
     alerte = null
     if (!cells[k] || cells[k].ch !== ch) {
       guetter(k, ch)
-      cells[k] = { ch, pid: me.pid }; delete PC[k]; save('cdlm:pc:' + gid, PC)
+      cells[k] = doutNext ? { ch, pid: me.pid, dq: 1 } : { ch, pid: me.pid }; delete PC[k]; save('cdlm:pc:' + gid, PC)
       draw(sel.r, sel.c, true); updLines(sel.r, sel.c); progress(true)
-      send({ t: 'put', r: sel.r, c: sel.c, ch, d: sel.d })
+      send({ t: 'put', r: sel.r, c: sel.c, ch, d: sel.d, dq: doutNext ? 1 : 0 })
+    } else if (!!cells[k].dq !== doutNext) {   // même lettre : on confirme (retire le doute) ou on la marque
+      if (doutNext) cells[k].dq = 1; else delete cells[k].dq
+      send({ t: 'doute', r: sel.r, c: sel.c, on: doutNext }); draw(sel.r, sel.c); updLines(sel.r, sel.c)
     }
+    doutNext = false
   }
   step(1); refresh()
 }
@@ -285,6 +302,7 @@ function onKey(e) {
   if (e.target !== kb && e.target !== document.body) return
   if (e.ctrlKey || e.metaKey || e.altKey) return
   const k = e.key
+  if (k === '?') { e.preventDefault(); douter(); return }
   if (k.length === 1 && norm(k)) { e.preventDefault(); for (const ch of norm(k)) type(ch); return }
   if (k === 'Backspace') { e.preventDefault(); erase(true) }
   else if (k === 'Delete') { e.preventDefault(); erase(false) }
@@ -309,6 +327,7 @@ kb.addEventListener('beforeinput', e => { if (e.inputType === 'deleteContentBack
 // outil
 function setMode(m) { mode = m; $('m-ink').classList.toggle('on', m === 'ink'); $('m-pc').classList.toggle('on', m === 'pc'); kbFocus(); clavSkin(true) }
 $('m-ink').onclick = () => setMode('ink'); $('m-pc').onclick = () => setMode('pc')
+$('m-dq').onclick = e => { e.preventDefault(); douter() }
 
 // zoom au doigt (téléphone uniquement)
 {
@@ -442,11 +461,12 @@ function on(m) {
   switch (m.t) {
     case 'put': {
       const k = key(m.r, m.c), mine = me && m.pid === me.pid && cells[k] && cells[k].ch === m.ch
-      cells[k] = { ch: m.ch, pid: m.pid }
+      cells[k] = m.dq ? { ch: m.ch, pid: m.pid, dq: 1 } : { ch: m.ch, pid: m.pid }
       if (PC[k]) { delete PC[k]; save('cdlm:pc:' + gid, PC) }
       if (!mine) { draw(m.r, m.c, true); updLines(m.r, m.c); progress(true); if (sel) refresh(false) }
       break
     }
+    case 'doute': { const v = cells[key(m.r, m.c)]; if (v) { if (m.on) v.dq = 1; else delete v.dq; draw(m.r, m.c); updLines(m.r, m.c); if (sel) refresh(false) } break }
     case 'del': { delete cells[key(m.r, m.c)]; draw(m.r, m.c); updLines(m.r, m.c); progress(false); if (sel) refresh(false); break }
     case 'found': { foundSet.add(m.id); progress(true); scores[m.pid] = (scores[m.pid] || 0) + 1; feed.unshift({ id: m.id, pid: m.pid, word: m.word, ts: m.ts }); feed = feed.slice(0, 30); owners[m.id] = m.pid; ranking(); fil(true); break }
     case 'unfound': { foundSet.delete(m.id); progress(false); if (scores[m.pid]) scores[m.pid]--; feed = feed.filter(f => f.t === 'casse' || f.t === 'corr' || f.id !== m.id); delete owners[m.id]; ranking(); fil(false); break }
@@ -562,15 +582,16 @@ colG.addEventListener('mousedown', e => { if (enJeu && !e.target.closest('input'
 var clav = localStorage.getItem('cdlm:kb') !== 'tel'
 {
   const k = document.createElement('div'); k.className = 'clav'; k.id = 'clav'
-  for (const row of ['AZERTYUIOP', 'QSDFGHJKLM', 'WXCVBN#']) {
+  for (const row of ['AZERTYUIOP', 'QSDFGHJKLM', 'WXCVBN?#']) {
     const r = document.createElement('div'); r.className = 'rg'
     for (const ch of row) {
       const b = document.createElement('button'); b.type = 'button'; b.innerHTML = '<span></span>'; b.firstChild.textContent = ch
       if (ch === '#') { b.className = 'del'; b.setAttribute('aria-label', 'Effacer') }
+      if (ch === '?') { b.className = 'dqk'; b.setAttribute('aria-label', 'Pas sûr') }
       b.addEventListener('pointerdown', e => {
         e.preventDefault(); b.classList.add('app'); setTimeout(() => b.classList.remove('app'), 110)
         if (navigator.vibrate) navigator.vibrate(6)
-        if (ch === '#') erase(true); else type(ch)
+        if (ch === '#') erase(true); else if (ch === '?') douter(); else type(ch)
       })
       r.appendChild(b)
     }

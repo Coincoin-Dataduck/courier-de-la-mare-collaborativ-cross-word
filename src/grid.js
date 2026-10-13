@@ -189,14 +189,24 @@ export class Grid {
       return
     }
 
-    if (this.abandon && (m.t === 'put' || m.t === 'del')) return
+    if (this.abandon && (m.t === 'put' || m.t === 'del' || m.t === 'doute')) return
 
     const d = m.d === 'v' ? 'v' : 'h'   // le sens dans lequel le joueur écrit
 
     if (m.t === 'put') {
       const ch = String(m.ch || '').toUpperCase()
       if (!inside || !LETTER.test(ch)) return
-      await this.onEdit(r + ',' + c, ch, pid, pid, d)
+      await this.onEdit(r + ',' + c, ch, pid, pid, d, false, !!m.dq)
+      return
+    }
+
+    // « Pas sûr » : on marque ou on démarque une lettre déjà posée (tout le monde peut)
+    if (m.t === 'doute') {
+      const k = r + ',' + c, v = this.cells[k]
+      if (!inside || !v || !!v.dq === !!m.on) return
+      if (m.on) v.dq = 1; else delete v.dq
+      await this.ctx.storage.put('c:' + k, v)
+      this.broadcast({ t: 'doute', r, c, on: !!m.on, pid })
       return
     }
 
@@ -241,7 +251,7 @@ export class Grid {
     // « C'est bon » : un autre joueur valide la correction
     if (m.t === 'cestbon') {
       const id = String(m.id || ''), y = this.corriges[id]
-      if (!y || y.by === pid) return
+      if (!y) return
       await this.resolveCorr(id)
       this.sendConf()
       return
@@ -252,7 +262,7 @@ export class Grid {
 
   // Toute modification d'une case passe par ici.
   // ch = null pour effacer. author = à qui appartient la lettre, actor = qui agit, d = sens d'écriture.
-  async onEdit(k, ch, author, actor, d, sys = false) {
+  async onEdit(k, ch, author, actor, d, sys = false, dq = false) {
     const st = this.ctx.storage, old = this.cells[k], now = Date.now()
     if (ch ? old && old.ch === ch : !old) return
     const ws = this.byCell[k] || [], casse = []
@@ -310,10 +320,10 @@ export class Grid {
 
     // 3. La case elle-même
     if (ch) {
-      this.cells[k] = { ch, pid: author }
+      this.cells[k] = dq ? { ch, pid: author, dq: 1 } : { ch, pid: author }
       await st.put('c:' + k, this.cells[k])
       const [r, c] = k.split(',').map(Number)
-      this.broadcast({ t: 'put', r, c, ch, pid: author })
+      this.broadcast({ t: 'put', r, c, ch, pid: author, dq: dq ? 1 : 0 })
     } else {
       delete this.cells[k]
       await st.delete('c:' + k)
