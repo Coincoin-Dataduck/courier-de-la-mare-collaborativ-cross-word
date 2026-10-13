@@ -28,6 +28,8 @@ export class Grid {
     // Mots corrigés dans leur sens : y:<mot> = la version d'avant ; q:<mot>|<case> = ses lettres barrées
     this.corriges = Object.fromEntries([...(await st.list({ prefix: 'y:' }))].map(([k, v]) => [k.slice(2), v]))
     this.qratures = Object.fromEntries([...(await st.list({ prefix: 'q:' }))].map(([k, v]) => [k.slice(2), v]))
+    // Crayon partagé : l:<case> = { ch, pid } ; ne compte pas, ne casse rien
+    this.pencils = Object.fromEntries([...(await st.list({ prefix: 'l:' }))].map(([k, v]) => [k.slice(2), v]))
     this.casses = (await st.get('casses')) || []       // les dernières cassures, pour le fil
     this.index()
   }
@@ -48,7 +50,7 @@ export class Grid {
 
   state() {
     const feed = [...Object.entries(this.found).map(([id, f]) => ({ id, ...f })), ...this.casses].sort((a, b) => b.ts - a.ts).slice(0, 30)
-    return { meta: this.meta, cells: this.cells, players: this.players, scores: this.scores(), feed, foundIds: Object.keys(this.found), abandon: this.abandon, revoir: this.revoir, ratures: this.ratures, corriges: this.corriges, qratures: this.qratures, owners: Object.fromEntries(Object.entries(this.found).map(([id, f]) => [id, f.pid])) }
+    return { meta: this.meta, cells: this.cells, players: this.players, scores: this.scores(), feed, foundIds: Object.keys(this.found), abandon: this.abandon, pencils: this.pencils, revoir: this.revoir, ratures: this.ratures, corriges: this.corriges, qratures: this.qratures, owners: Object.fromEntries(Object.entries(this.found).map(([id, f]) => [id, f.pid])) }
   }
 
   // Résumé pour le kiosque
@@ -95,6 +97,10 @@ export class Grid {
         for (const k of Object.keys(this.cells)) {
           const [r, c] = k.split(',').map(Number)
           if (r >= m.rows || c >= m.cols || isBlack(m, r, c)) { delete this.cells[k]; del.push('c:' + k) }
+        }
+        for (const k of Object.keys(this.pencils)) {
+          const [r, c] = k.split(',').map(Number)
+          if (r >= m.rows || c >= m.cols || isBlack(m, r, c)) { delete this.pencils[k]; del.push('l:' + k) }
         }
         this.index()
         const ok = new Set(this.words.map(w => w.id + ':' + w.cells.map(x => x.join(',')).join('|')))
@@ -189,7 +195,7 @@ export class Grid {
       return
     }
 
-    if (this.abandon && (m.t === 'put' || m.t === 'del' || m.t === 'doute')) return
+    if (this.abandon && (m.t === 'put' || m.t === 'del' || m.t === 'doute' || m.t === 'pc')) return
 
     const d = m.d === 'v' ? 'v' : 'h'   // le sens dans lequel le joueur écrit
 
@@ -197,6 +203,16 @@ export class Grid {
       const ch = String(m.ch || '').toUpperCase()
       if (!inside || !LETTER.test(ch)) return
       await this.onEdit(r + ',' + c, ch, pid, pid, d, false, !!m.dq)
+      return
+    }
+
+    // Crayon : tout le monde le voit, on écrit et on efface librement (jamais par-dessus l'encre)
+    if (m.t === 'pc') {
+      const k = r + ',' + c, ch = m.ch ? String(m.ch).toUpperCase() : null
+      if (!inside || this.cells[k] || (ch && !LETTER.test(ch))) return
+      if (ch) { this.pencils[k] = { ch, pid }; await st.put('l:' + k, this.pencils[k]) }
+      else { if (!this.pencils[k]) return; delete this.pencils[k]; await st.delete('l:' + k) }
+      this.broadcast({ t: 'pc', r, c, ch, pid }, ws)
       return
     }
 
@@ -266,6 +282,10 @@ export class Grid {
     const st = this.ctx.storage, old = this.cells[k], now = Date.now()
     if (ch ? old && old.ch === ch : !old) return
     const ws = this.byCell[k] || [], casse = []
+    // On passe à la machine la même lettre que le crayon de quelqu'un : elle reste à lui (et le mot aussi s'il se termine là)
+    const pen = this.pencils[k]
+    let pcBy = null
+    if (ch && pen && !old && !sys && author === actor && pen.ch === ch) author = pcBy = pen.pid
 
     // 0. Les mots corrigés : remettre une lettre barrée la rend à son auteur
     for (const w of ws) {
@@ -321,6 +341,7 @@ export class Grid {
     // 3. La case elle-même
     if (ch) {
       this.cells[k] = dq ? { ch, pid: author, dq: 1 } : { ch, pid: author }
+      if (pen) { delete this.pencils[k]; await st.delete('l:' + k) }
       await st.put('c:' + k, this.cells[k])
       const [r, c] = k.split(',').map(Number)
       this.broadcast({ t: 'put', r, c, ch, pid: author, dq: dq ? 1 : 0 })
@@ -336,7 +357,7 @@ export class Grid {
     if (ch) for (const w of ws) {
       if (this.found[w.id] || this.revoir[w.id]) continue
       if (!w.cells.every(([a, b]) => this.cells[a + ',' + b])) continue
-      await this.complete(w, actor)
+      await this.complete(w, pcBy || actor)
       const y = this.corriges[w.id]
       if (y && this.found[w.id].word === y.word) await this.resolveCorr(w.id)
     }

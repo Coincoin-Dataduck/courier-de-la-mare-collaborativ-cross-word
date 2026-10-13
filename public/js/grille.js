@@ -8,7 +8,8 @@ const MOBILE = matchMedia('(max-width:760px)').matches
 
 let meta, W, byCell = {}
 let cells = {}, players = {}, scores = {}, feed = [], online = new Set(), others = {}
-let PC = load('cdlm:pc:' + gid) || {}          // crayon de bois : uniquement dans ce navigateur
+let PC = {}, PCby = {}          // crayon de bois : partagé, ne compte pas
+try { localStorage.removeItem('cdlm:pc:' + gid) } catch {}
 let me = load('cdlm:me')
 let abandon = null, foundSet = new Set(), revoir = {}, ratures = {}
 let sel = null, mode = 'ink', ws = null, wsTry = 0, cs = 18, el = [], done = false
@@ -37,7 +38,8 @@ function apply(st) {
   W = words(meta); byCell = {}
   for (const w of [...W.h, ...W.v]) for (const [r, c] of w.cells) (byCell[key(r, c)] ||= {})[w.d] = w
   meta.clues = meta.clues || {}
-  for (const k of Object.keys(PC)) { const [r, c] = k.split(',').map(Number); if (r >= meta.rows || c >= meta.cols || isBlack(meta, r, c) || cells[k]) delete PC[k] }
+  PC = {}; PCby = {}
+  for (const [k, v] of Object.entries(st.pencils || {})) if (!cells[k]) { PC[k] = v.ch; PCby[k] = v.pid }
 }
 
 // ---------- la une ----------
@@ -106,7 +108,7 @@ function draw(r, c, anim) {
   if (v) {
     const pl = players[v.pid] || { name: '?', color: '#24211d' }
     e.innerHTML = nb + '<i' + (anim ? ' class="st"' : '') + ' title="' + esc(pl.name) + (v.dq ? ' (pas sûr)' : '') + '" style="color:' + pl.color + '">' + v.ch + '</i>' + (v.dq ? '<u class="dq" style="color:' + pl.color + '">?</u>' : '')
-  } else if (p) e.innerHTML = nb + '<i class="pc' + (anim ? ' dr' : '') + '" title="Au crayon (toi seul·e le vois)">' + p + '</i>'
+  } else if (p) e.innerHTML = nb + '<i class="pc' + (anim ? ' dr' : '') + '" style="color:' + ((players[PCby[k]] || {}).color || '#4f4c47') + '" title="Au crayon : ' + esc((players[PCby[k]] || {}).name || '?') + '">' + p + '</i>'
   else e.innerHTML = nb
   const ra = ratureDe(k)
   if (ra) { const pr = players[ra.pid] || { color: '#24211d' }; e.insertAdjacentHTML('beforeend', '<s class="rat" style="color:' + pr.color + '">' + ra.ch + '</s>') }
@@ -127,7 +129,6 @@ function douter() {
   if (!sel || !me || abandon || mode === 'pc') return
   const k = key(sel.r, sel.c), v = cells[k]
   if (v) { const on = !v.dq; if (on) v.dq = 1; else delete v.dq; send({ t: 'doute', r: sel.r, c: sel.c, on }); draw(sel.r, sel.c); updLines(sel.r, sel.c) }
-  else doutNext = !doutNext
   refresh(false); kbFocus()
 }
 function majDq() {
@@ -272,12 +273,13 @@ function type(ch) {
   const k = key(sel.r, sel.c)
   if (mode === 'pc') {
     if (cells[k]) { step(1); refresh(); return } // on n'écrit pas au crayon par-dessus la machine
-    PC[k] = ch; save('cdlm:pc:' + gid, PC); draw(sel.r, sel.c, true); updLines(sel.r, sel.c)
+    PC[k] = ch; PCby[k] = me.pid; send({ t: 'pc', r: sel.r, c: sel.c, ch }); draw(sel.r, sel.c, true); updLines(sel.r, sel.c)
   } else {
     alerte = null
     if (!cells[k] || cells[k].ch !== ch) {
       guetter(k, ch)
-      cells[k] = doutNext ? { ch, pid: me.pid, dq: 1 } : { ch, pid: me.pid }; delete PC[k]; save('cdlm:pc:' + gid, PC)
+      const qui = !cells[k] && PC[k] === ch && PCby[k] ? PCby[k] : me.pid   // on recopie le crayon de quelqu'un : la lettre reste à lui
+      cells[k] = doutNext ? { ch, pid: qui, dq: 1 } : { ch, pid: qui }; delete PC[k]; delete PCby[k]
       draw(sel.r, sel.c, true); updLines(sel.r, sel.c); progress(true)
       send({ t: 'put', r: sel.r, c: sel.c, ch, d: sel.d, dq: doutNext ? 1 : 0 })
     } else if (!!cells[k].dq !== doutNext) {   // même lettre : on confirme (retire le doute) ou on la marque
@@ -292,7 +294,7 @@ function erase(back) {
   if (!sel || abandon) return
   let k = key(sel.r, sel.c)
   if (back && !cells[k] && !PC[k]) { step(-1); k = key(sel.r, sel.c) }
-  if (PC[k] && (mode === 'pc' || !cells[k])) { delete PC[k]; save('cdlm:pc:' + gid, PC) }
+  if (PC[k] && (mode === 'pc' || !cells[k])) { delete PC[k]; delete PCby[k]; send({ t: 'pc', r: sel.r, c: sel.c, ch: null }) }
   else if (cells[k]) { alerte = null; guetter(k, null); delete cells[k]; send({ t: 'del', r: sel.r, c: sel.c, d: sel.d }); progress(false) }
   draw(sel.r, sel.c); updLines(sel.r, sel.c); refresh()
 }
@@ -462,10 +464,11 @@ function on(m) {
     case 'put': {
       const k = key(m.r, m.c), mine = me && m.pid === me.pid && cells[k] && cells[k].ch === m.ch
       cells[k] = m.dq ? { ch: m.ch, pid: m.pid, dq: 1 } : { ch: m.ch, pid: m.pid }
-      if (PC[k]) { delete PC[k]; save('cdlm:pc:' + gid, PC) }
+      if (PC[k]) { delete PC[k]; delete PCby[k] }
       if (!mine) { draw(m.r, m.c, true); updLines(m.r, m.c); progress(true); if (sel) refresh(false) }
       break
     }
+    case 'pc': { const k = key(m.r, m.c); if (cells[k]) break; if (m.ch) { PC[k] = m.ch; PCby[k] = m.pid } else { delete PC[k]; delete PCby[k] } draw(m.r, m.c, !!m.ch); updLines(m.r, m.c); if (sel) refresh(false); break }
     case 'doute': { const v = cells[key(m.r, m.c)]; if (v) { if (m.on) v.dq = 1; else delete v.dq; draw(m.r, m.c); updLines(m.r, m.c); if (sel) refresh(false) } break }
     case 'del': { delete cells[key(m.r, m.c)]; draw(m.r, m.c); updLines(m.r, m.c); progress(false); if (sel) refresh(false); break }
     case 'found': { foundSet.add(m.id); progress(true); scores[m.pid] = (scores[m.pid] || 0) + 1; feed.unshift({ id: m.id, pid: m.pid, word: m.word, ts: m.ts }); feed = feed.slice(0, 30); owners[m.id] = m.pid; ranking(); fil(true); break }
