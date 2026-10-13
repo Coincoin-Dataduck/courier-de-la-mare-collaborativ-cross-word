@@ -93,7 +93,7 @@ function build() {
 }
 function fit() {
   const vp = $('vp')
-  if (MOBILE) cs = 28
+  if (MOBILE) { if (enJeu) { fitJeu(); cs = fitCs } else { vp.classList.add('apercu'); cs = Math.max(6, Math.floor((vp.clientWidth - 4) / (meta.cols + 1.2))) } }
   else cs = Math.max(14, Math.min(34, Math.floor((vp.clientWidth - 30) / meta.cols)))
   setCs()
 }
@@ -165,7 +165,7 @@ function list(d, ol) {
     const empty = w.cells.find(([r, c]) => !cells[key(r, c)]) || w.cells[0]
     sel = { r: empty[0], c: empty[1], d }
     refresh(); kbFocus()
-    if (MOBILE) $('defbar').scrollIntoView({ block: 'start', behavior: 'smooth' })
+    if (enJeu) { $('side').classList.remove('ouvert'); if (cs < 24) zoom(30); else centrer() } else if (MOBILE) ouvrirJeu(null)
   }
 }
 function updLines(r, c) {
@@ -182,6 +182,7 @@ $('g').addEventListener('click', e => {
   if (sel && sel.r === r && sel.c === cc) sel.d = sel.d === 'h' ? 'v' : 'h'
   else sel = { r, c: cc, d: sel ? sel.d : 'h' }
   refresh(false); kbFocus()
+  if (enJeu && cs < 24) zoom(30)
 })
 function step(dir) {
   const w = wordAt(sel.r, sel.c, sel.d); if (!w) return
@@ -252,17 +253,25 @@ $('m-ink').onclick = () => setMode('ink'); $('m-pc').onclick = () => setMode('pc
   const vp = $('vp'); let pin = null
   const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY)
   vp.addEventListener('touchstart', e => {
-    if (e.touches.length !== 2) return
+    if (e.touches.length !== 2 || (MOBILE && !enJeu)) return
     const b = vp.getBoundingClientRect(), mx = (e.touches[0].clientX + e.touches[1].clientX) / 2 - b.left, my = (e.touches[0].clientY + e.touches[1].clientY) / 2 - b.top
-    pin = { d: dist(e.touches), cs0: cs, mx, my, px: (vp.scrollLeft + mx) / cs, py: (vp.scrollTop + my) / cs }
+    pin = { d: dist(e.touches), cs0: cs, k: 1, mx, my, px: vp.scrollLeft + mx, py: vp.scrollTop + my }
+    const g = $('g'); g.classList.add('geste'); g.style.transformOrigin = pin.px + 'px ' + pin.py + 'px'
   }, { passive: true })
   vp.addEventListener('touchmove', e => {
     if (!pin || e.touches.length !== 2) return
     e.preventDefault()
-    const n = Math.round(Math.min(52, Math.max(10, pin.cs0 * dist(e.touches) / pin.d)))
-    if (n !== cs) { cs = n; setCs(); vp.scrollLeft = pin.px * cs - pin.mx; vp.scrollTop = pin.py * cs - pin.my }
+    pin.k = Math.min(52 / pin.cs0, Math.max(6 / pin.cs0, dist(e.touches) / pin.d))
+    $('g').style.transform = 'scale(' + pin.k + ')'
   }, { passive: false })
-  vp.addEventListener('touchend', e => { if (e.touches.length < 2) pin = null })
+  const fin = e => {
+    if (!pin || e.touches.length >= 2) return
+    const g = $('g'), n = Math.round(pin.cs0 * pin.k)
+    g.style.transform = ''; g.classList.remove('geste')
+    if (n !== cs) { cs = n; setCs(); vp.scrollLeft = pin.px / pin.cs0 * cs - pin.mx; vp.scrollTop = pin.py / pin.cs0 * cs - pin.my }
+    pin = null; majTout()
+  }
+  vp.addEventListener('touchend', fin); vp.addEventListener('touchcancel', fin)
   document.addEventListener('gesturestart', e => { if (vp.contains(e.target)) e.preventDefault() })
   addEventListener('resize', () => { if (meta && !matchMedia('(max-width:760px)').matches) fit() })
 }
@@ -287,6 +296,7 @@ function progress(anim) {
   let tot = 0, ink = 0
   for (let r = 0; r < meta.rows; r++) for (let c = 0; c < meta.cols; c++) if (!isBlack(meta, r, c)) { tot++; if (cells[key(r, c)]) ink++ }
   const pct = tot ? Math.floor(ink * 100 / tot) : 0
+  $('j-info').textContent = 'N° ' + meta.numero + ' · ' + pct + ' %'
   $('avance').textContent = pct + ' % de la grille est rempli.'
   // Tous les mots trouvés : double tamponné. Abandonnée par l'admin : tamponné seulement.
   const nW = W.h.length + W.v.length, dbl = nW > 0 && foundSet.size >= nW, fin = dbl || !!abandon
@@ -384,3 +394,82 @@ function on(m) {
 }
 
 start()
+
+// ---------- vue de jeu (téléphone) ----------
+// Dans le journal, la grille n'est qu'une image : la page défile normalement.
+// En jeu, la grille prend tout l'écran, rien d'autre ne défile.
+var enJeu = false, fitCs = 18, savedY = 0
+const side = $('side'), colG = document.querySelector('.col-grille')
+function vvSync() {
+  const v = window.visualViewport, st = document.documentElement.style
+  st.setProperty('--vh', (v ? v.height : innerHeight) + 'px'); st.setProperty('--vt', (v ? v.offsetTop : 0) + 'px')
+}
+if (window.visualViewport) { visualViewport.addEventListener('resize', vvSync); visualViewport.addEventListener('scroll', vvSync) }
+function fitJeu() {
+  const vp = $('vp')
+  fitCs = Math.max(6, Math.floor(Math.min((vp.clientWidth - 8) / (meta.cols + 1.2), (vp.clientHeight - 8) / (meta.rows + 1.2))))
+}
+function centrer() {
+  if (!sel) return
+  const vp = $('vp'), w = wordAt(sel.r, sel.c, sel.d), cl = w ? w.cells : [[sel.r, sel.c]]
+  const a = el[cl[0][0]][cl[0][1]], z = el[cl[cl.length - 1][0]][cl[cl.length - 1][1]]
+  const wide = z.offsetLeft + cs - a.offsetLeft <= vp.clientWidth && z.offsetTop + cs - a.offsetTop <= vp.clientHeight
+  const e = wide ? null : el[sel.r][sel.c]
+  const x = e ? e.offsetLeft + cs / 2 : (a.offsetLeft + z.offsetLeft + cs) / 2, y = e ? e.offsetTop + cs / 2 : (a.offsetTop + z.offsetTop + cs) / 2
+  vp.scrollTo({ left: x - vp.clientWidth / 2, top: y - vp.clientHeight / 2, behavior: 'smooth' })
+}
+function zoom(n) { cs = n; setCs(); centrer(); majTout() }
+function majTout() { $('j-tout').textContent = cs > fitCs ? 'Toute la grille' : 'Zoomer' }
+function ouvrirJeu(at) {
+  if (enJeu) return
+  enJeu = true; savedY = scrollY; vvSync()
+  document.body.style.top = -savedY + 'px'; document.body.classList.add('enjeu')
+  $('vp').classList.remove('apercu')
+  if (location.hash !== '#jeu') history.pushState({ jeu: 1 }, '', '#jeu')
+  if (at) { const [r, c] = at; sel = { r, c, d: sel ? sel.d : 'h' } }
+  kbFocus()   // tout de suite : le téléphone n'ouvre le clavier que pendant le geste
+  requestAnimationFrame(() => {
+    fitJeu(); cs = fitCs; setCs(); refresh(false)
+    if (at && cs < 24) zoom(30); else majTout()
+  })
+}
+function fermerJeu(pop) {
+  if (!enJeu) return
+  enJeu = false; kb.blur(); side.classList.remove('ouvert')
+  document.body.classList.remove('enjeu'); document.body.style.top = ''
+  scrollTo(0, savedY)
+  fit(); refresh(false)
+  if (!pop && location.hash === '#jeu') history.back()
+}
+if (location.hash === '#jeu') history.replaceState(null, '', location.pathname)
+addEventListener('popstate', () => { if (enJeu) fermerJeu(true) })
+// dans le journal, toucher la grille ouvre le jeu
+$('vp').addEventListener('click', e => {
+  if (!MOBILE || enJeu) return
+  e.stopPropagation()
+  const c = e.target.closest('.c')
+  ouvrirJeu(c && !c.classList.contains('n') && c.dataset.r != null ? [+c.dataset.r, +c.dataset.c] : null)
+}, true)
+$('jouer').onclick = () => ouvrirJeu(null)
+$('j-close').onclick = () => fermerJeu(false)
+$('j-tout').onclick = () => { if (cs > fitCs) { cs = fitCs; setCs(); majTout() } else zoom(30); kbFocus() }
+$('j-defs').onclick = () => { kb.blur(); side.classList.add('ouvert'); side.scrollTop = 0; const a = side.querySelector('li.act'); if (a) a.scrollIntoView({ block: 'center' }) }
+$('j-sidex').onclick = () => { side.classList.remove('ouvert'); kbFocus() }
+// en jeu, toucher la grille ou le bandeau ne doit pas fermer le clavier
+colG.addEventListener('mousedown', e => { if (enJeu && !e.target.closest('input')) e.preventDefault() })
+// bandeau : toucher = changer de sens, glisser = mot suivant / précédent
+{
+  const d = $('defbar'); let t0 = null
+  d.addEventListener('touchstart', e => { if (!enJeu || e.target.closest('.mode')) { t0 = null; return } const t = e.touches[0]; t0 = { x: t.clientX, y: t.clientY } }, { passive: true })
+  d.addEventListener('touchend', e => {
+    if (!t0) return
+    const t = e.changedTouches[0], dx = t.clientX - t0.x, dy = t.clientY - t0.y; t0 = null
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { e.preventDefault(); nextWord(dx < 0 ? 1 : -1); if (cs < 24) zoom(30); kbFocus() }
+    else if (Math.abs(dx) < 12 && Math.abs(dy) < 12 && sel) {
+      e.preventDefault()
+      const o = sel.d === 'h' ? 'v' : 'h'
+      if (wordAt(sel.r, sel.c, o)) { sel.d = o; refresh(false); centrer() }
+      kbFocus()
+    }
+  })
+}

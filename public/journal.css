@@ -296,3 +296,30 @@ body{padding:18px 0 40px}
   .kq-h h2{font-size:21px}
   .flt{margin-left:0}
 }
+
+/* vue de jeu (téléphone) */
+.jbar,.jouer,.j-fermer{display:none}
+.g.geste{will-change:transform}
+.g.geste .c i.pc{filter:none}
+@media (max-width:760px){
+  .jouer{display:block;width:100%;margin:10px 0 0;font:700 15px/1 Narrow,sans-serif;letter-spacing:.14em;text-transform:uppercase;background:#24211d;color:#ebe6da;border:0;padding:14px;cursor:pointer}
+  .vp.apercu{overflow:hidden;touch-action:auto;max-height:none;margin:0;padding:0}
+  .vp.apercu .tag{display:none}
+  body.enjeu{position:fixed;left:0;right:0;width:100%;overflow:hidden}
+  body.enjeu .col-grille{position:fixed;left:0;right:0;top:var(--vt,0px);height:var(--vh,100dvh);z-index:40;background:#ebe6da;display:flex;flex-direction:column;padding:0;border:0;margin:0}
+  body.enjeu .rubhead,body.enjeu .chap,body.enjeu .sous,body.enjeu .jouer{display:none}
+  body.enjeu .jbar{display:flex;align-items:center;gap:6px;padding:6px 8px;border-bottom:3px solid #24211d;flex:none;font:700 12px/1 Narrow,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#24211d}
+  .jbar button{background:none;border:1px solid #24211d;color:#24211d;font:inherit;padding:8px 9px;cursor:pointer}
+  .jbar #j-close{font-size:16px;padding:5px 10px}
+  .jbar #j-info{flex:1;text-align:center;white-space:nowrap}
+  body.enjeu .vp{flex:1;min-height:0;max-height:none;margin:0;padding:4px;overflow:auto;overscroll-behavior:contain;touch-action:pan-x pan-y}
+  body.enjeu .defbar{order:5;position:static;margin:0;padding:6px 8px;border-top:3px solid #24211d;border-bottom:0;flex:none;flex-wrap:nowrap;min-height:56px;gap:8px;user-select:none;-webkit-user-select:none}
+  body.enjeu .dtxt{flex:1;min-width:0;font-size:15px;line-height:1.25;max-height:5.2em;overflow:hidden}
+  body.enjeu .mode{flex-direction:column}
+  body.enjeu .mode button{padding:6px 7px;font-size:10px}
+  body.enjeu .mode button+button{border-left:0;border-top:1px solid #24211d}
+  body.enjeu .col-side.ouvert{display:block;position:fixed;left:0;right:0;top:var(--vt,0px);height:var(--vh,100dvh);z-index:45;overflow:auto;background:#ebe6da;padding:0 14px 30px;overscroll-behavior:contain;border:0}
+  body.enjeu .col-side.ouvert .j-fermer{display:block;position:sticky;top:0;z-index:2;width:calc(100% + 28px);margin:0 -14px 10px;background:#24211d;color:#ebe6da;border:0;padding:13px;font:700 13px/1 Narrow,sans-serif;letter-spacing:.12em;text-transform:uppercase;text-align:left}
+  body.enjeu .col-side.ouvert .defs ol{max-height:none}
+}
+@media (max-width:760px){body.enjeu #journal>*:not(.jeu){display:none}body.enjeu .jeu{border:0;margin:0}}
