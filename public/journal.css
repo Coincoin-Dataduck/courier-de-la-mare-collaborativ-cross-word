@@ -323,3 +323,18 @@ body{padding:18px 0 40px}
   body.enjeu .col-side.ouvert .defs ol{max-height:none}
 }
 @media (max-width:760px){body.enjeu #journal>*:not(.jeu){display:none}body.enjeu .jeu{border:0;margin:0}}
+
+@media (max-width:760px){.vp.apercu{cursor:zoom-in}}
+
+/* clavier réduit */
+.clav{display:none}
+@media (max-width:760px){
+  body.enjeu.clav-on .clav{display:flex;flex-direction:column;gap:5px;order:6;flex:none;padding:6px 3px calc(6px + env(safe-area-inset-bottom));background:#e2dccf;border-top:1px solid #24211d;user-select:none;-webkit-user-select:none}
+  .clav .rg{display:flex;justify-content:center;gap:4px}
+  .clav button{flex:0 1 9.4%;height:46px;padding:0;background:#f1ece1;color:#24211d;border:1px solid #24211d;border-radius:0;font:700 19px/1 Century,Georgia,serif;touch-action:manipulation;-webkit-tap-highlight-color:transparent;cursor:pointer}
+  .clav button.app{background:#24211d;color:#ebe6da}
+  .clav button.del{flex-basis:21%;font:700 12px/1 Narrow,sans-serif;letter-spacing:.1em;text-transform:uppercase}
+  .jbar #j-clav{padding:8px 7px}
+  .jbar #j-clav.on{background:#24211d;color:#ebe6da}
+  body.enjeu .defbar{border-bottom:0}
+}

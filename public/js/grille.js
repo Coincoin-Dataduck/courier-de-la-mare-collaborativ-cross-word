@@ -174,7 +174,7 @@ function updLines(r, c) {
 
 // ---------- saisie ----------
 const kb = $('kb')
-function kbFocus() { try { kb.focus({ preventScroll: true }) } catch {} }
+function kbFocus() { if (enJeu && clav) { kb.blur(); return } try { kb.focus({ preventScroll: true }) } catch {} }
 let lastTap = 0
 $('g').addEventListener('click', e => {
   const c = e.target.closest('.c'); if (!c || c.classList.contains('n')) return
@@ -269,7 +269,7 @@ $('m-ink').onclick = () => setMode('ink'); $('m-pc').onclick = () => setMode('pc
     const g = $('g'), n = Math.round(pin.cs0 * pin.k)
     g.style.transform = ''; g.classList.remove('geste')
     if (n !== cs) { cs = n; setCs(); vp.scrollLeft = pin.px / pin.cs0 * cs - pin.mx; vp.scrollTop = pin.py / pin.cs0 * cs - pin.my }
-    pin = null; majTout()
+    pin = null; placer(); majTout()
   }
   vp.addEventListener('touchend', fin); vp.addEventListener('touchcancel', fin)
   document.addEventListener('gesturestart', e => { if (vp.contains(e.target)) e.preventDefault() })
@@ -404,7 +404,9 @@ function vvSync() {
   const v = window.visualViewport, st = document.documentElement.style
   st.setProperty('--vh', (v ? v.height : innerHeight) + 'px'); st.setProperty('--vt', (v ? v.offsetTop : 0) + 'px')
 }
-if (window.visualViewport) { visualViewport.addEventListener('resize', vvSync); visualViewport.addEventListener('scroll', vvSync) }
+let vvT = 0
+function vvJeu() { clearTimeout(vvT); vvT = setTimeout(() => { if (!enJeu) return; fitJeu(); placer(); centrer(); majTout() }, 150) }
+if (window.visualViewport) { visualViewport.addEventListener('resize', vvJeu); visualViewport.addEventListener('resize', vvSync); visualViewport.addEventListener('scroll', vvSync) }
 function fitJeu() {
   const vp = $('vp')
   fitCs = Math.max(6, Math.floor(Math.min((vp.clientWidth - 8) / (meta.cols + 1.2), (vp.clientHeight - 8) / (meta.rows + 1.2))))
@@ -418,7 +420,13 @@ function centrer() {
   const x = e ? e.offsetLeft + cs / 2 : (a.offsetLeft + z.offsetLeft + cs) / 2, y = e ? e.offsetTop + cs / 2 : (a.offsetTop + z.offsetTop + cs) / 2
   vp.scrollTo({ left: x - vp.clientWidth / 2, top: y - vp.clientHeight / 2, behavior: 'smooth' })
 }
-function zoom(n) { cs = n; setCs(); centrer(); majTout() }
+function placer() {
+  const vp = $('vp'), g = $('g'); g.style.margin = ''
+  if (!enJeu) return
+  const dx = Math.max(0, (vp.clientWidth - 8 - g.offsetWidth) / 2), dy = Math.max(0, (vp.clientHeight - 8 - g.offsetHeight) / 2)
+  g.style.margin = dy + 'px 0 0 ' + dx + 'px'
+}
+function zoom(n) { cs = n; setCs(); placer(); centrer(); majTout() }
 function majTout() { $('j-tout').textContent = cs > fitCs ? 'Toute la grille' : 'Zoomer' }
 function ouvrirJeu(at) {
   if (enJeu) return
@@ -429,13 +437,12 @@ function ouvrirJeu(at) {
   if (at) { const [r, c] = at; sel = { r, c, d: sel ? sel.d : 'h' } }
   kbFocus()   // tout de suite : le téléphone n'ouvre le clavier que pendant le geste
   requestAnimationFrame(() => {
-    fitJeu(); cs = fitCs; setCs(); refresh(false)
-    if (at && cs < 24) zoom(30); else majTout()
+    fitJeu(); refresh(false); zoom(Math.max(fitCs, 30))
   })
 }
 function fermerJeu(pop) {
   if (!enJeu) return
-  enJeu = false; kb.blur(); side.classList.remove('ouvert')
+  enJeu = false; kb.blur(); side.classList.remove('ouvert'); $('g').style.margin = ''
   document.body.classList.remove('enjeu'); document.body.style.top = ''
   scrollTo(0, savedY)
   fit(); refresh(false)
@@ -450,9 +457,8 @@ $('vp').addEventListener('click', e => {
   const c = e.target.closest('.c')
   ouvrirJeu(c && !c.classList.contains('n') && c.dataset.r != null ? [+c.dataset.r, +c.dataset.c] : null)
 }, true)
-$('jouer').onclick = () => ouvrirJeu(null)
 $('j-close').onclick = () => fermerJeu(false)
-$('j-tout').onclick = () => { if (cs > fitCs) { cs = fitCs; setCs(); majTout() } else zoom(30); kbFocus() }
+$('j-tout').onclick = () => { fitJeu(); if (cs > fitCs) { cs = fitCs; setCs(); placer(); majTout() } else zoom(Math.max(fitCs, 30)); kbFocus() }
 $('j-defs').onclick = () => { kb.blur(); side.classList.add('ouvert'); side.scrollTop = 0; const a = side.querySelector('li.act'); if (a) a.scrollIntoView({ block: 'center' }) }
 $('j-sidex').onclick = () => { side.classList.remove('ouvert'); kbFocus() }
 // en jeu, toucher la grille ou le bandeau ne doit pas fermer le clavier
@@ -472,4 +478,33 @@ colG.addEventListener('mousedown', e => { if (enJeu && !e.target.closest('input'
       kbFocus()
     }
   })
+}
+
+// ---------- clavier réduit (téléphone, en jeu) ----------
+// Par défaut on utilise notre clavier ; « Clavier » bascule sur celui du téléphone (mémorisé).
+var clav = localStorage.getItem('cdlm:kb') !== 'tel'
+{
+  const k = document.createElement('div'); k.className = 'clav'; k.id = 'clav'
+  for (const row of ['AZERTYUIOP', 'QSDFGHJKLM', 'WXCVBN#']) {
+    const r = document.createElement('div'); r.className = 'rg'
+    for (const ch of row) {
+      const b = document.createElement('button'); b.type = 'button'; b.textContent = ch
+      if (ch === '#') { b.className = 'del'; b.textContent = 'Effacer' }
+      b.addEventListener('pointerdown', e => {
+        e.preventDefault(); b.classList.add('app'); setTimeout(() => b.classList.remove('app'), 110)
+        if (navigator.vibrate) navigator.vibrate(6)
+        if (ch === '#') erase(true); else type(ch)
+      })
+      r.appendChild(b)
+    }
+    k.appendChild(r)
+  }
+  colG.appendChild(k)
+  const maj = () => { document.body.classList.toggle('clav-on', clav); $('j-clav').classList.toggle('on', !clav) }
+  maj()
+  $('j-clav').onclick = () => {
+    clav = !clav; localStorage.setItem('cdlm:kb', clav ? 'nous' : 'tel'); maj()
+    if (clav) kb.blur(); else kbFocus()
+    setTimeout(() => { fitJeu(); placer(); centrer(); majTout() }, 200)
+  }
 }
