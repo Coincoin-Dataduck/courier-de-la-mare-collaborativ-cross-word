@@ -1,7 +1,7 @@
 // Le Courrier de la Mare — Worker Cloudflare (assets statiques + Durable Objects)
 import { Grid } from './grid.js'
 import { Registry } from './registry.js'
-import { matin } from './matin.js'
+import { matin, annonce, poster } from './matin.js'
 export { Grid, Registry }
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
@@ -56,6 +56,18 @@ export default {
         if (b.webhook === null) d.webhook = ''
         await reg.fetch('https://do/discord', { method: 'PUT', body: JSON.stringify(d) })
         return json({ ok: true })
+      }
+      if (p.length === 5 && p[4] === 'annoncer' && req.method === 'POST') {
+        const b = await req.json().catch(() => ({}))
+        if (!ID_RE.test(b.id || '')) return json({ error: 'grille introuvable' }, 404)
+        const R = await (await reg.fetch('https://do/discord')).json()
+        const r = await grid(env, b.id).fetch('https://do/digest')
+        if (!r.ok) return json({ error: 'grille introuvable' }, 404)
+        const d = await r.json(), now = Date.now()
+        const res = await poster(R.webhook, annonce(d, (R.site || url.origin).replace(/\/$/, '')))
+        await reg.fetch('https://do/dlog', { method: 'POST', body: JSON.stringify({ ts: now, statut: res.statut, detail: res.detail, quoi: 'Annonce de la grille n° ' + d.numero }) })
+        if (res.statut === 'envoye') await reg.fetch('https://do/discord', { method: 'PUT', body: JSON.stringify({ annonces: { ...(R.annonces || {}), [b.id]: now } }) })
+        return json(res)
       }
       if (p.length === 5 && (p[4] === 'apercu' || p[4] === 'envoyer') && req.method === 'POST') {
         const b = await req.json().catch(() => ({}))

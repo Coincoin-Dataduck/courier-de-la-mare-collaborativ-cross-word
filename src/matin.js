@@ -67,3 +67,17 @@ export async function matin(env, src, { now = Date.now(), force = false, jour = 
   await noter(r.ok ? 'envoye' : 'echec', detail)
   return { envoye: r.ok, hier, statut: r.ok ? 'envoye' : 'echec', detail, apercu: content }
 }
+
+// Annonce immédiate d'une grille (bouton de l'éditeur)
+export function annonce(d, site = '') {
+  const l = site ? '[Grille n° ' + d.numero + '](<' + site + '/g/' + d.id + '>)' : 'Grille n° ' + d.numero
+  return '**Le Courrier de la Mare** · Nouvelle grille !\n' + l + ' · ' + d.rows + ' × ' + d.cols + (d.source ? ' · ' + d.source : '') + (d.prevue ? '\nCorrection prévue ' + jolie(d.prevue) + '.' : '')
+}
+export async function poster(webhook, content) {
+  if (!webhook) return { statut: 'echec', detail: 'pas d’adresse de webhook' }
+  let r
+  try { r = await fetch(webhook, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ content, allowed_mentions: { parse: [] } }) }) }
+  catch { return { statut: 'echec', detail: 'Discord injoignable' } }
+  if (r.ok) return { statut: 'envoye', detail: '' }
+  return { statut: 'echec', detail: r.status === 404 || r.status === 401 ? 'Discord ne reconnaît pas le webhook' : 'Discord a répondu ' + r.status }
+}

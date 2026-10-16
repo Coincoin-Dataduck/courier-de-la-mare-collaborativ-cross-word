@@ -65,6 +65,22 @@ $('grilles').onclick = async e => {
   }
 }
 $('nouvelle').onclick = () => ouvrir(null)
+// Annoncer la grille ouverte sur Discord, tout de suite
+const DAPI = API.replace(/\/grids$/, '/discord')
+$('ed-annoncer').onclick = async () => {
+  if (!cur) return
+  if (dirty) { $('ed-etat').textContent = 'Enregistre d’abord la grille.'; return }
+  try {
+    const R = await (await fetch(DAPI)).json()
+    if (!R.aWebhook) { $('ed-etat').textContent = 'Colle d’abord l’adresse du webhook dans le panneau Discord.'; return }
+    const deja = R.annonces && R.annonces[cur.id]
+    const q = deja ? 'Déjà annoncée le ' + new Date(deja).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) + '. L’annoncer encore ?' : 'Annoncer la grille n° ' + cur.numero + ' sur Discord ?'
+    if (!confirm(q)) return
+    $('ed-etat').textContent = 'Envoi…'
+    const r = await (await fetch(DAPI + '/annoncer', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: cur.id }) })).json()
+    $('ed-etat').textContent = r.statut === 'envoye' ? 'Annoncée sur Discord.' : 'Échec : ' + (r.detail || r.error || '')
+  } catch (e) { $('ed-etat').textContent = e.message }
+}
 $('retour').onclick = () => { if (dirty && !confirm('Quitter sans enregistrer ?')) return; dirty = false; liste() }
 addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = '' } })
 
@@ -85,7 +101,7 @@ async function ouvrir(id) {
   $('f-sam').value = m ? m.meteoSam : ''; $('f-dim').value = m ? m.meteoDim : ''
   $('f-lune').value = m ? m.lune : ''; $('f-soleil').value = m ? m.soleil : ''; $('f-prevue').value = m ? (m.prevue || '') : samediSuivant()
   $('f-pa').value = (m ? m.annonces : ANNONCES).join('\n')
-  $('ed-voir').classList.toggle('hide', !m); if (m) $('ed-voir').href = '/g/' + m.id
+  $('ed-voir').classList.toggle('hide', !m); $('ed-annoncer').classList.toggle('hide', !m); if (m) $('ed-voir').href = '/g/' + m.id
   $('ed-etat').textContent = info && info.filled ? 'Attention : ' + info.filled + ' lettres déjà posées par ' + info.players + ' joueur' + (info.players > 1 ? 's' : '') + '. Changer les cases noires efface les lettres concernées.' : ''
   $('vue-liste').classList.add('hide'); $('vue-ed').classList.remove('hide')
   dirty = false; act = null
@@ -315,7 +331,7 @@ $('ed-save').onclick = async () => {
     const m = cur ? await api('/' + cur.id, { method: 'PUT', body: JSON.stringify(body) }) : await api('', { method: 'POST', body: JSON.stringify(body) })
     cur = m; dirty = false
     $('ed-titre').textContent = 'Grille n° ' + m.numero
-    $('ed-voir').href = '/g/' + m.id; $('ed-voir').classList.remove('hide')
+    $('ed-voir').href = '/g/' + m.id; $('ed-voir').classList.remove('hide'); $('ed-annoncer').classList.remove('hide')
     $('ed-etat').innerHTML = 'Enregistré. Lien à partager : <span class="lien">' + esc(lien(m.id)) + '</span>'
   } catch (e) { $('ed-etat').textContent = 'Pas enregistré : ' + e.message }
   btn.disabled = false

@@ -21,7 +21,7 @@ function onoff(on) {
   $('ds-on').classList.toggle('on', on); $('ds-off').classList.toggle('on', !on)
 }
 function journal(j) {
-  $('ds-journal').innerHTML = j.length ? j.map(e => esc(quand(e.ts)) + (e.main ? ' (à la main)' : '') + ' · ' +
+  $('ds-journal').innerHTML = j.length ? j.map(e => esc(quand(e.ts)) + (e.quoi ? ' · ' + esc(e.quoi) : '') + (e.main ? ' (à la main)' : '') + ' · ' +
     (e.statut === 'envoye' ? '<span class="ok">envoyé</span>' : e.statut === 'rien' ? 'rien de neuf, pas de message' : '<span class="ko">échec</span>' + (e.detail ? ' (' + esc(e.detail) + ')' : ''))).join('<br>')
     : 'Rien n’a encore été envoyé.'
 }
