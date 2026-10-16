@@ -1,6 +1,7 @@
 // Le Courrier de la Mare — Worker Cloudflare (assets statiques + Durable Objects)
 import { Grid } from './grid.js'
 import { Registry } from './registry.js'
+import { matin } from './matin.js'
 export { Grid, Registry }
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
@@ -12,6 +13,12 @@ function page(env, req, file, status = 200) {
 }
 const registry = env => env.REGISTRY.get(env.REGISTRY.idFromName('registry'))
 const grid = (env, id) => env.GRID.get(env.GRID.idFromName(id))
+const sources = env => ({
+  liste: async () => (await registry(env).fetch('https://do/list')).json(),
+  digest: async id => { const r = await grid(env, id).fetch('https://do/digest'); return r.ok ? r.json() : null },
+  reglages: async () => (await registry(env).fetch('https://do/discord')).json(),
+  noter: async e => { await registry(env).fetch('https://do/dlog', { method: 'POST', body: JSON.stringify(e) }) },
+})
 function isAdmin(env, secret) {
   try { secret = decodeURIComponent(secret || '') } catch { return false }
   const s = (env.ADMIN_SECRET || '').trim()
@@ -25,8 +32,37 @@ function newId() {
 }
 
 export default {
+  // Réveil toutes les heures : on n'envoie qu'à l'heure choisie dans l'admin (heure de Paris)
+  async scheduled(ev, env, ctx) { ctx.waitUntil(matin(env, sources(env), { now: ev.scheduledTime })) },
   async fetch(req, env) {
     const url = new URL(req.url), p = url.pathname.split('/').filter(Boolean)
+    // Réglages du message du matin : /api/admin/<secret>/discord[/apercu|/envoyer]
+    if (p[0] === 'api' && p[1] === 'admin' && p[3] === 'discord') {
+      if (!isAdmin(env, p[2])) return json({ error: 'introuvable' }, 404)
+      const reg = registry(env)
+      if (p.length === 4 && req.method === 'GET') {
+        const R = await (await reg.fetch('https://do/discord')).json()
+        return json({ ...R, webhook: undefined, aWebhook: !!R.webhook, webhookFin: R.webhook ? R.webhook.slice(-4) : '' })
+      }
+      if (p.length === 4 && req.method === 'PUT') {
+        const b = await req.json().catch(() => ({})), d = { site: url.origin }
+        if ('on' in b) d.on = !!b.on
+        if ('heure' in b) d.heure = Math.max(0, Math.min(23, b.heure | 0))
+        if (b.types && typeof b.types === 'object') d.types = Object.fromEntries(['neuves', 'terminees', 'corrigees', 'enCours', 'presque'].map(k => [k, !!b.types[k]]))
+        if (typeof b.webhook === 'string' && b.webhook.trim()) {
+          if (!/^https:\/\/(\w+\.)?discord(app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(b.webhook.trim())) return json({ error: 'Ce n’est pas une adresse de webhook Discord.' }, 400)
+          d.webhook = b.webhook.trim()
+        }
+        if (b.webhook === null) d.webhook = ''
+        await reg.fetch('https://do/discord', { method: 'PUT', body: JSON.stringify(d) })
+        return json({ ok: true })
+      }
+      if (p.length === 5 && (p[4] === 'apercu' || p[4] === 'envoyer') && req.method === 'POST') {
+        const b = await req.json().catch(() => ({}))
+        return json(await matin(env, sources(env), { force: true, jour: b.jour, envoyer: p[4] === 'envoyer' }))
+      }
+      return json({ error: 'introuvable' }, 404)
+    }
 
     // Pages
     if (p[0] === 'g' && p.length === 2) return ID_RE.test(p[1]) ? page(env, req, '/grille.html') : page(env, req, '/introuvable.html', 404)

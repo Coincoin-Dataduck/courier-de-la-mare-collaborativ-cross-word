@@ -19,6 +19,7 @@ export class Grid {
     this.found = Object.fromEntries([...(await st.list({ prefix: 'f:' }))].map(([k, v]) => [k.slice(2), v]))
     this.abandon = (await st.get('abandon')) || null   // date d'abandon (admin) : grille tamponnée, plus d'écriture
     this.last = (await st.get('last')) || null         // date de la dernière lettre
+    this.finTs = (await st.get('finTs')) || null       // date où tous les mots ont été trouvés sans conflit
     // Correction : sol = la solution (cases noires = '#'), corr = { ts, justes: { mot: pid|null }, total, mots (justes), fautes (lettres) }
     this.sol = (await st.get('sol')) || null
     this.corr = (await st.get('corr')) || null
@@ -108,7 +109,11 @@ export class Grid {
     return { corr, id: m.id, numero: m.numero, rows: m.rows, cols: m.cols, blacks: m.blacks, filled, pct: tot ? Math.floor(ink * 100 / tot) : 0, players: who.size, best, last, fin, abandon: this.abandon }
   }
   registry() { return this.env.REGISTRY.get(this.env.REGISTRY.idFromName('registry')) }
-  async push() { try { await this.registry().fetch('https://do/sum', { method: 'POST', body: JSON.stringify(this.summary()) }) } catch {} }
+  async push() {
+    const tout = !this.corr && !this.abandon && this.summary().fin === 'simple'
+    if (tout && !this.finTs) { this.finTs = Date.now(); await this.ctx.storage.put('finTs', this.finTs) }
+    else if (!tout && !this.corr && this.finTs) { this.finTs = null; await this.ctx.storage.delete('finTs') }
+    try { await this.registry().fetch('https://do/sum', { method: 'POST', body: JSON.stringify(this.summary()) }) } catch {} }
   // On prévient le kiosque quelques secondes après une modification (pas à chaque lettre)
   async touch() {
     const st = this.ctx.storage
@@ -168,6 +173,24 @@ export class Grid {
       const total = this.meta.blacks.split('').filter(x => x === '0').length
       const lettres = Object.fromEntries(Object.entries(this.cells).map(([k, v]) => [k, v.ch]))
       return json({ meta: this.meta, filled: Object.keys(this.cells).length, total, players: Object.keys(this.players).length, lettres, sol: this.sol, corr: this.corr, brouillon: this.brouillon })
+    }
+    // Pour le message du matin
+    if (url.pathname === '/digest') {
+      if (!this.meta) return json({ error: 'vide' }, 404)
+      const sc = this.scores()
+      const classement = Object.entries(sc).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([p, n]) => ({ name: (this.players[p] || {}).name || '?', n }))
+      const presque = []
+      if (!this.corr && !this.abandon) for (const w of this.words) {
+        if (this.found[w.id]) continue
+        const pat = w.cells.map(([r, c]) => (this.cells[r + ',' + c] || {}).ch || '_').join(''), vide = pat.split('_').length - 1
+        if (vide >= 1 && vide <= 3 && vide < w.cells.length) presque.push({ n: w.n, d: w.d, def: this.meta.clues[w.id] || '', pat, vide })
+      }
+      presque.sort((a, b) => a.vide - b.vide || b.pat.length - a.pat.length)
+      const m = this.meta
+      return json({ id: m.id, numero: m.numero, rows: m.rows, cols: m.cols, source: m.source, prevue: m.prevue || '',
+        pct: this.summary().pct, last: this.last, finTs: this.finTs, abandon: this.abandon,
+        corr: this.corr ? { ts: this.corr.ts, mots: this.corr.mots, total: this.corr.total, fautes: this.corr.fautes } : null,
+        classement, presque: presque.slice(0, 3) })
     }
     if (url.pathname === '/brouillon' && req.method === 'PUT') {
       const { sol } = await req.json().catch(() => ({}))

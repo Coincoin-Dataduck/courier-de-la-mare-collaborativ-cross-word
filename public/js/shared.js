@@ -39,7 +39,7 @@ export function cleanMeta(m) {
   return {
     v: 2, id: m.id, numero: m.numero | 0, created: m.created, rows, cols, blacks, clues,
     source: txt(m.source), date: txt(m.date, 10),
-    meteoSam: txt(m.meteoSam), meteoDim: txt(m.meteoDim), saint: txt(m.saint), lune: txt(m.lune), soleil: txt(m.soleil),
+    meteoSam: txt(m.meteoSam), meteoDim: txt(m.meteoDim), saint: txt(m.saint), lune: txt(m.lune), soleil: txt(m.soleil), prevue: txt(m.prevue, 10),
     annonces: (Array.isArray(m.annonces) ? m.annonces : []).map(a => txt(a, 300)).filter(Boolean).slice(0, 12)
   }
 }

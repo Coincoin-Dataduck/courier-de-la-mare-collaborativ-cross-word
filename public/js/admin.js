@@ -27,6 +27,8 @@ async function api(path = '', opt = {}) {
   return r.json()
 }
 const lien = id => location.origin + '/g/' + id
+// le samedi après aujourd'hui (jamais aujourd'hui)
+const samediSuivant = () => { const d = new Date(); d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7)); return d.toLocaleDateString('en-CA') }
 const fdate = d => d ? new Date(d + (d.length === 10 ? 'T12:00:00' : '')).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : ''
 const meta = () => ({ rows: R, cols: C, blacks: B })
 
@@ -81,7 +83,7 @@ async function ouvrir(id) {
   $('f-date').value = m ? m.date : new Date().toISOString().slice(0, 10)
   $('f-saint').value = m ? m.saint : ''
   $('f-sam').value = m ? m.meteoSam : ''; $('f-dim').value = m ? m.meteoDim : ''
-  $('f-lune').value = m ? m.lune : ''; $('f-soleil').value = m ? m.soleil : ''
+  $('f-lune').value = m ? m.lune : ''; $('f-soleil').value = m ? m.soleil : ''; $('f-prevue').value = m ? (m.prevue || '') : samediSuivant()
   $('f-pa').value = (m ? m.annonces : ANNONCES).join('\n')
   $('ed-voir').classList.toggle('hide', !m); if (m) $('ed-voir').href = '/g/' + m.id
   $('ed-etat').textContent = info && info.filled ? 'Attention : ' + info.filled + ' lettres déjà posées par ' + info.players + ' joueur' + (info.players > 1 ? 's' : '') + '. Changer les cases noires efface les lettres concernées.' : ''
@@ -294,7 +296,7 @@ $('f-taille').onclick = () => {
   R = nr; C = nc; B = nb; $('f-rows').value = R; $('f-cols').value = C; dirty = true
   grille()
 }
-for (const id of ['f-source', 'f-date', 'f-saint', 'f-sam', 'f-dim', 'f-lune', 'f-soleil', 'f-pa']) $(id).addEventListener('input', () => dirty = true)
+for (const id of ['f-source', 'f-date', 'f-saint', 'f-sam', 'f-dim', 'f-lune', 'f-soleil', 'f-prevue', 'f-pa']) $(id).addEventListener('input', () => dirty = true)
 
 // ---------- enregistrer ----------
 $('ed-save').onclick = async () => {
@@ -305,7 +307,7 @@ $('ed-save').onclick = async () => {
   const body = {
     rows: R, cols: C, blacks: B, clues: keep,
     source: $('f-source').value.trim(), date: $('f-date').value, saint: $('f-saint').value.trim(),
-    meteoSam: $('f-sam').value.trim(), meteoDim: $('f-dim').value.trim(), lune: $('f-lune').value.trim(), soleil: $('f-soleil').value.trim(),
+    meteoSam: $('f-sam').value.trim(), meteoDim: $('f-dim').value.trim(), lune: $('f-lune').value.trim(), soleil: $('f-soleil').value.trim(), prevue: $('f-prevue').value,
     annonces: $('f-pa').value.split('\n').map(s => s.trim()).filter(Boolean)
   }
   const btn = $('ed-save'); btn.disabled = true; $('ed-etat').textContent = 'On imprime…'

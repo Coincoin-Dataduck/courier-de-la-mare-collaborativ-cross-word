@@ -38,9 +38,38 @@
   <div class="a-rule"></div>
 
   <div id="vue-liste">
-    <div class="outils" style="margin-top:16px"><h2 style="margin:0">Les grilles</h2><span class="etat"></span><button class="pbtn vert" id="nouvelle">Nouvelle grille</button></div>
+    <div class="outils" style="margin-top:16px"><h2 style="margin:0">Les grilles</h2><span class="etat"></span><button class="pbtn" id="discord">Discord</button><button class="pbtn vert" id="nouvelle">Nouvelle grille</button></div>
     <table class="liste"><thead><tr><th>N°</th><th>Date</th><th class="mob">Taille</th><th class="mob">Journal d'origine</th><th>Lien à partager</th><th class="mob">État</th><th></th></tr></thead><tbody id="grilles"></tbody></table>
     <p class="msg" id="vide"></p>
+  </div>
+
+  <div id="vue-dsc" class="hide">
+    <div class="outils" style="margin-top:16px"><button class="pbtn" id="ds-retour">← Les grilles</button><h2 style="margin:0 0 0 8px">Le message du matin</h2><span class="onoff" style="margin-left:auto"><button id="ds-on">Activé</button><button id="ds-off" class="on">Coupé</button></span></div>
+
+    <p class="k">1. Où envoyer</p>
+    <div class="form">
+      <label class="l4">Adresse du webhook Discord<small>Dans Discord : paramètres du salon → Intégrations → Webhooks → Copier l'URL. Une fois enregistrée, elle n'est plus affichée en entier.</small><input id="ds-hook" autocomplete="off" spellcheck="false"></label>
+      <label>Heure d'envoi (Paris)<select id="ds-heure" class="court"></select></label>
+    </div>
+
+    <p class="k">2. Ce qu'on raconte</p>
+    <div class="types">
+      <label><input type="checkbox" id="ds-t-neuves"> Nouvelles grilles</label>
+      <label><input type="checkbox" id="ds-t-terminees"> Grilles terminées <small>(avec le classement)</small></label>
+      <label><input type="checkbox" id="ds-t-corrigees"> Grilles corrigées <small>(note, fautes, classement des mots justes)</small></label>
+      <label><input type="checkbox" id="ds-t-enCours"> Grilles en cours <small>(ce qui reste, correction prévue)</small></label>
+      <label class="ds-sous"><input type="checkbox" id="ds-t-presque"> avec 3 définitions presque finies</label>
+      <p class="ds-nt">Si rien de coché ne s'est passé la veille, pas de message.</p>
+    </div>
+
+    <p class="k">3. Dernier envoi</p>
+    <p class="der" id="ds-journal"></p>
+
+    <p class="k">4. Aperçu</p>
+    <div class="outils" style="margin:0"><label class="jr">Journée racontée <input type="date" id="ds-jour"></label><button class="pbtn" id="ds-voir">Voir l'aperçu</button><button class="pbtn" id="ds-envoyer">Envoyer maintenant</button></div>
+    <div class="ds-ap hide" id="ds-apercu"></div>
+
+    <div class="barre"><span class="etat" id="ds-etat"></span><button class="pbtn vert" id="ds-save">Enregistrer</button></div>
   </div>
 
   <div id="vue-ed" class="hide">
@@ -80,6 +109,7 @@
       <label>Météo dimanche<input id="f-dim" placeholder="Éclaircies, 14°"></label>
       <label>Lune<input id="f-lune" placeholder="calculée toute seule"></label>
       <label>Soleil<input id="f-soleil" placeholder="8 h 07 – 19 h 08"></label>
+      <label>Correction prévue le<input type="date" id="f-prevue"></label>
       <label class="l4">Petites annonces<small>Une annonce par ligne. La première phrase s'imprime en gras.</small><textarea id="f-pa" spellcheck="true"></textarea></label>
     </div>
 
@@ -92,4 +122,5 @@
 
 </section>
 <script type="module" src="/js/admin.js"></script>
+<script type="module" src="/js/discord.js"></script>
 </body></html>

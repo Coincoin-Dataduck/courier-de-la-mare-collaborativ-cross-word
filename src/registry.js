@@ -2,6 +2,8 @@
 // g:<id> = la fiche de la grille, k:<id> = son résumé pour le kiosque (tenu à jour par la grille)
 const json = (d, s = 200) => new Response(JSON.stringify(d), { status: s, headers: { 'content-type': 'application/json; charset=utf-8' } })
 
+const DSC = { on: false, webhook: '', heure: 8, site: '', types: { neuves: true, terminees: true, corrigees: true, enCours: true, presque: true } }
+
 export class Registry {
   constructor(ctx, env) { this.ctx = ctx; this.env = env }
   async fetch(req) {
@@ -36,6 +38,9 @@ export class Registry {
       await st.put('n', n)
       return json({ numero: n })
     }
+    if (path === '/discord' && req.method === 'GET') return json({ ...DSC, ...((await st.get('discord')) || {}), journal: (await st.get('dlog')) || [] })
+    if (path === '/discord' && req.method === 'PUT') { const d = await req.json(); await st.put('discord', { ...((await st.get('discord')) || {}), ...d }); return json({ ok: true }) }
+    if (path === '/dlog' && req.method === 'POST') { const e = await req.json(); await st.put('dlog', [e, ...((await st.get('dlog')) || [])].slice(0, 7)); return json({ ok: true }) }
     if (path === '/put') { const g = await req.json(); await st.put('g:' + g.id, g); return json({ ok: true }) }
     if (path === '/del') { const { id } = await req.json(); await st.delete(['g:' + id, 'k:' + id]); return json({ ok: true }) }
     return json({ error: 'introuvable' }, 404)

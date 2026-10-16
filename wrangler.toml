@@ -11,6 +11,10 @@ not_found_handling = "404-page"
 # sert admin.html / grille.html tels quels, sans redirection
 html_handling = "none"
 
+# Message Discord : réveil toutes les heures, l'heure d'envoi se choisit dans l'admin
+[triggers]
+crons = ["0 * * * *"]
+
 [[durable_objects.bindings]]
 name = "GRID"
 class_name = "Grid"

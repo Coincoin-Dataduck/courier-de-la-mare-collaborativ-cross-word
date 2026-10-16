@@ -417,3 +417,18 @@ body.enjeu .m-dq small{display:none}
 .ed .c i.sl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 calc(var(--cs) * .62)/1 Century,serif;font-style:normal;color:#24211d;pointer-events:none}
 .ed:not(.sol) .c i.sl{display:none}
 .ed.sol .c{cursor:text}
+
+/* Admin : réglages Discord */
+#vue-dsc .onoff{display:inline-flex;border:1px solid var(--ink)}
+#vue-dsc .onoff button{font:700 12px/1 Narrow,sans-serif;letter-spacing:.1em;text-transform:uppercase;border:0;background:transparent;color:var(--ink);padding:7px 12px;cursor:pointer}
+#vue-dsc .onoff button.on{background:var(--ink);color:var(--paper)}
+#vue-dsc .form select.court{width:auto;align-self:flex-start;font:400 15px/1.35 Times,serif;color:var(--ink);background:#f3efe5;border:1px solid #8a8273;padding:6px 8px}
+#vue-dsc .types label{display:flex;gap:8px;align-items:center;font:15px/1.4 Times,serif;margin:4px 0}
+#vue-dsc .types label.ds-sous{margin-left:26px}
+#vue-dsc .types small{font:italic 12.5px/1.3 Century,serif;color:var(--grey)}
+#vue-dsc .types .ds-nt{font:italic 12.5px/1.3 Century,serif;color:var(--grey);margin:6px 0 0}
+#vue-dsc .der{font:15px/1.5 Times,serif}
+#vue-dsc .der .ok{color:var(--green);font-weight:700}
+#vue-dsc .der .ko{color:#b3261e;font-weight:700}
+#vue-dsc .jr{font:15px Times,serif;display:flex;gap:6px;align-items:center}
+#vue-dsc .ds-ap{background:#f3efe5;border:1px solid var(--ink);padding:12px 14px;font:14px/1.45 Mono,monospace;white-space:pre-wrap;margin-top:8px}
