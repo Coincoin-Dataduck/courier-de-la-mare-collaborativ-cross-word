@@ -71,7 +71,7 @@ async function ouvrir(id) {
   let m = null, info = null
   if (id) { try { info = await api('/' + id); m = info.meta } catch (e) { alert(e.message); return } }
   cur = m
-  lettres = (info && info.lettres) || {}; corrInfo = (info && info.corr) || null; S = (info && info.sol) || ''; solCur = null
+  lettres = (info && info.lettres) || {}; corrInfo = (info && info.corr) || null; S = (info && (info.sol || info.brouillon)) || ''; solCur = null
   $('m-sol').classList.toggle('hide', !m)
   R = m ? m.rows : 15; C = m ? m.cols : 15; B = m ? m.blacks : '0'.repeat(R * C)
   clues = { ...((m && m.clues) || {}) }
@@ -98,6 +98,7 @@ function setMode(m) {
   for (const b of $('ed-mode').querySelectorAll('button')) b.classList.toggle('on', b.dataset.m === m)
   $('ed-g').classList.toggle('def', m === 'def'); $('ed-g').classList.toggle('sol', m === 'sol')
   $('ed-corr').classList.toggle('hide', m !== 'sol'); $('ed-decorr').classList.toggle('hide', m !== 'sol' || !corrInfo)
+  $('ed-save').classList.toggle('hide', m === 'sol')
   if (m === 'sol') { infoSol(); hl(); return }
   solCur = null
   $('ed-aide').textContent = m === 'noir'
@@ -235,6 +236,16 @@ function infoSol() {
 function setS(r, c, ch) {
   const i = r * C + c; S = S.slice(0, i) + ch + S.slice(i + 1)
   el[r][c].querySelector('i.sl').textContent = ch.trim(); infoSol()
+  garder()
+}
+let tGarde = null
+function garder() {
+  clearTimeout(tGarde)
+  $('ed-etat').textContent = 'Brouillon…'
+  tGarde = setTimeout(async () => {
+    try { await api('/' + cur.id + '/brouillon', { method: 'PUT', body: JSON.stringify({ sol: S }) }); $('ed-etat').textContent = 'Brouillon gardé. Clique sur « Corriger la grille » quand tout est tapé.' }
+    catch (e) { $('ed-etat').textContent = 'Brouillon pas gardé : ' + e.message }
+  }, 700)
 }
 // case blanche suivante (dir = 1) ou précédente (dir = -1) dans le sens d'écriture
 function voisine(r, c, d, dir) {

@@ -22,6 +22,7 @@ export class Grid {
     // Correction : sol = la solution (cases noires = '#'), corr = { ts, justes: { mot: pid|null }, total, fautes }
     this.sol = (await st.get('sol')) || null
     this.corr = (await st.get('corr')) || null
+    this.brouillon = (await st.get('brouillon')) || ''   // solution en cours de saisie, jamais montrée aux joueurs
     // Mots contestés : x:<mot> = { pid, word, by, ts, tenu } (la version d'avant et à qui elle était)
     // r:<mot>|<case> = { ch, pid } : la lettre d'avant, raturée
     this.contestes = Object.fromEntries([...(await st.list({ prefix: 'x:' }))].map(([k, v]) => [k.slice(2), v]))
@@ -155,7 +156,13 @@ export class Grid {
     if (url.pathname === '/admin') {
       const total = this.meta.blacks.split('').filter(x => x === '0').length
       const lettres = Object.fromEntries(Object.entries(this.cells).map(([k, v]) => [k, v.ch]))
-      return json({ meta: this.meta, filled: Object.keys(this.cells).length, total, players: Object.keys(this.players).length, lettres, sol: this.sol, corr: this.corr })
+      return json({ meta: this.meta, filled: Object.keys(this.cells).length, total, players: Object.keys(this.players).length, lettres, sol: this.sol, corr: this.corr, brouillon: this.brouillon })
+    }
+    if (url.pathname === '/brouillon' && req.method === 'PUT') {
+      const { sol } = await req.json().catch(() => ({}))
+      if (typeof sol !== 'string' || sol.length !== this.meta.rows * this.meta.cols || !/^[A-Z# ]*$/.test(sol)) return json({ error: 'brouillon illisible' }, 400)
+      this.brouillon = sol; await st.put('brouillon', sol)
+      return json({ ok: true })
     }
     if (url.pathname === '/solution' && req.method === 'DELETE') {
       this.corr = null; this.sol = null

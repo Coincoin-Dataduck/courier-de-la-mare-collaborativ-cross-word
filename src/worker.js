@@ -63,6 +63,7 @@ export default {
         }
       } else if (ID_RE.test(id)) {
         const g = grid(env, id)
+        if (p[5] === 'brouillon' && req.method === 'PUT') return g.fetch('https://do/brouillon', { method: 'PUT', body: await req.text() })
         if (p[5] === 'solution' && (req.method === 'POST' || req.method === 'DELETE')) return g.fetch('https://do/solution', { method: req.method, body: req.method === 'POST' ? await req.text() : undefined })
         if (p[5] === 'abandon' && req.method === 'POST') return g.fetch('https://do/abandon', { method: 'POST', body: await req.text() })
         if (req.method === 'GET') return g.fetch('https://do/admin')
