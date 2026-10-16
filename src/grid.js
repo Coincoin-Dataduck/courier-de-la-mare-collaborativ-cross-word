@@ -19,6 +19,9 @@ export class Grid {
     this.found = Object.fromEntries([...(await st.list({ prefix: 'f:' }))].map(([k, v]) => [k.slice(2), v]))
     this.abandon = (await st.get('abandon')) || null   // date d'abandon (admin) : grille tamponnée, plus d'écriture
     this.last = (await st.get('last')) || null         // date de la dernière lettre
+    // Correction : sol = la solution (cases noires = '#'), corr = { ts, justes: { mot: pid|null }, total, fautes }
+    this.sol = (await st.get('sol')) || null
+    this.corr = (await st.get('corr')) || null
     // Mots contestés : x:<mot> = { pid, word, by, ts, tenu } (la version d'avant et à qui elle était)
     // r:<mot>|<case> = { ch, pid } : la lettre d'avant, raturée
     this.contestes = Object.fromEntries([...(await st.list({ prefix: 'x:' }))].map(([k, v]) => [k.slice(2), v]))
@@ -62,13 +65,15 @@ export class Grid {
 
   scores() {
     const s = {}
+    if (this.corr) { for (const p of Object.values(this.corr.justes)) if (p) s[p] = (s[p] || 0) + 1; return s }
     for (const f of Object.values(this.found)) s[f.pid] = (s[f.pid] || 0) + 1
     return s
   }
 
   state() {
-    const feed = [...Object.entries(this.found).map(([id, f]) => ({ id, ...f })), ...this.casses].sort((a, b) => b.ts - a.ts).slice(0, 30)
-    return { meta: this.meta, cells: this.cells, players: this.players, scores: this.scores(), feed, foundIds: Object.keys(this.found), abandon: this.abandon, pencils: this.pencils, contestes: this.contestes, ratures: this.ratures, owners: Object.fromEntries(Object.entries(this.found).map(([id, f]) => [id, f.pid])) }
+    const ev = this.corr ? [{ t: 'correcteur', ts: this.corr.ts, fautes: this.corr.fautes }] : []
+    const feed = [...Object.entries(this.found).map(([id, f]) => ({ id, ...f })), ...this.casses, ...ev].sort((a, b) => b.ts - a.ts).slice(0, 30)
+    return { corr: this.corr, sol: this.corr ? this.sol : null, meta: this.meta, cells: this.cells, players: this.players, scores: this.scores(), feed, foundIds: Object.keys(this.found), abandon: this.abandon, pencils: this.pencils, contestes: this.contestes, ratures: this.ratures, owners: Object.fromEntries(Object.entries(this.found).map(([id, f]) => [id, f.pid])) }
   }
 
   // Résumé pour le kiosque
@@ -85,8 +90,10 @@ export class Grid {
     const who = new Set([...Object.values(this.cells).map(x => x.pid), ...Object.values(this.found).map(x => x.pid)])
     const nw = (this.words || []).length, nf = Object.keys(this.found).length
     const last = this.last || Math.max(0, ...Object.values(this.found).map(f => f.ts || 0)) || null
-    const fin = nw > 0 && nf >= nw ? 'double' : this.abandon ? 'simple' : null
-    return { id: m.id, numero: m.numero, rows: m.rows, cols: m.cols, blacks: m.blacks, filled, pct: tot ? Math.floor(ink * 100 / tot) : 0, players: who.size, best, last, fin, abandon: this.abandon }
+    const tout = nw > 0 && nf >= nw && !Object.keys(this.contestes).length
+    const fin = this.corr ? (this.corr.fautes ? 'simple' : 'double') : this.abandon || tout ? 'simple' : null
+    const corr = this.corr ? { total: this.corr.total, fautes: this.corr.fautes, ts: this.corr.ts } : null
+    return { corr, id: m.id, numero: m.numero, rows: m.rows, cols: m.cols, blacks: m.blacks, filled, pct: tot ? Math.floor(ink * 100 / tot) : 0, players: who.size, best, last, fin, abandon: this.abandon }
   }
   registry() { return this.env.REGISTRY.get(this.env.REGISTRY.idFromName('registry')) }
   async push() { try { await this.registry().fetch('https://do/sum', { method: 'POST', body: JSON.stringify(this.summary()) }) } catch {} }
@@ -126,6 +133,7 @@ export class Grid {
         for (const id of Object.keys(this.contestes)) del.push('x:' + id)
         for (const id of Object.keys(this.ratures)) del.push('r:' + id)
         this.contestes = {}; this.ratures = {}
+        if (this.sol) { this.sol = null; this.corr = null; del.push('sol', 'corr') }
         for (let i = 0; i < del.length; i += 100) await st.delete(del.slice(i, i + 100))
       } else this.index()
       this.broadcast({ t: 'reload' })
@@ -146,7 +154,42 @@ export class Grid {
     }
     if (url.pathname === '/admin') {
       const total = this.meta.blacks.split('').filter(x => x === '0').length
-      return json({ meta: this.meta, filled: Object.keys(this.cells).length, total, players: Object.keys(this.players).length })
+      const lettres = Object.fromEntries(Object.entries(this.cells).map(([k, v]) => [k, v.ch]))
+      return json({ meta: this.meta, filled: Object.keys(this.cells).length, total, players: Object.keys(this.players).length, lettres, sol: this.sol, corr: this.corr })
+    }
+    if (url.pathname === '/solution' && req.method === 'DELETE') {
+      this.corr = null; this.sol = null
+      await st.delete(['corr', 'sol'])
+      this.broadcast({ t: 'reload' }); await this.push()
+      return json(this.summary())
+    }
+    if (url.pathname === '/solution' && req.method === 'POST') {
+      const { sol } = await req.json().catch(() => ({}))
+      const m = this.meta, N = m.rows * m.cols
+      if (typeof sol !== 'string' || sol.length !== N) return json({ error: 'solution incomplète' }, 400)
+      for (let i = 0; i < N; i++) {
+        const noir = m.blacks[i] === '1'
+        if (noir ? sol[i] !== '#' : !LETTER.test(sol[i])) return json({ error: noir ? 'case noire différente' : 'il manque des lettres' }, 400)
+      }
+      // La solution tranche : le point va à qui possède la version juste (l'ancienne d'un mot contesté, ou l'actuelle), sinon à personne
+      const justes = {}
+      for (const w of this.words) {
+        const sw = w.cells.map(([a, b]) => sol[a * m.cols + b]).join(''), x = this.contestes[w.id], f = this.found[w.id]
+        justes[w.id] = x && x.word === sw ? x.pid : f && f.word === sw ? f.pid : null
+      }
+      const total = this.words.length, fautes = Object.values(justes).filter(p => !p).length
+      this.sol = sol; this.corr = { ts: Date.now(), justes, total, fautes }
+      // les doutes et les contestations n'ont plus lieu d'être
+      const put = { sol, corr: this.corr }, del = []
+      for (const [k, v] of Object.entries(this.cells)) if (v.dq) { delete v.dq; put['c:' + k] = v }
+      for (const id of Object.keys(this.contestes)) del.push('x:' + id)
+      for (const rk of Object.keys(this.ratures)) del.push('r:' + rk)
+      this.contestes = {}; this.ratures = {}
+      const ks = Object.keys(put)
+      for (let i = 0; i < ks.length; i += 100) await st.put(Object.fromEntries(ks.slice(i, i + 100).map(k => [k, put[k]])))
+      for (let i = 0; i < del.length; i += 100) await st.delete(del.slice(i, i + 100))
+      this.broadcast({ t: 'reload' }); await this.push()
+      return json(this.summary())
     }
 
     if (url.pathname === '/' && req.method === 'DELETE') {
@@ -154,7 +197,7 @@ export class Grid {
       for (const ws of this.ctx.getWebSockets()) try { ws.close(4004, 'grille supprimée') } catch {}
       if (typeof st.deleteAlarm === 'function') await st.deleteAlarm()
       await st.deleteAll()
-      this.meta = null; this.cells = {}; this.players = {}; this.found = {}; this.abandon = null; this.last = null; this.contestes = {}; this.ratures = {}; this.pencils = {}; this.hist = {}; this.casses = []; this.index()
+      this.meta = null; this.cells = {}; this.players = {}; this.found = {}; this.abandon = null; this.last = null; this.contestes = {}; this.ratures = {}; this.pencils = {}; this.hist = {}; this.casses = []; this.sol = null; this.corr = null; this.index()
       return json({ ok: true })
     }
 
@@ -211,7 +254,7 @@ export class Grid {
       return
     }
 
-    if (this.abandon) return   // grille tamponnée : plus rien ne s'écrit
+    if (this.abandon || this.corr) return   // grille abandonnée ou corrigée : plus rien ne s'écrit
 
     if (m.t === 'put') {
       const ch = String(m.ch || '').toUpperCase()
@@ -278,10 +321,7 @@ export class Grid {
     if (m.t === 'cestbon') {
       const id = String(m.id || '')
       if (!this.contestes[id]) return
-      // On valide la ou les lettres changées : tous les mots contestés par ces mêmes cases sont réglés d'un coup
-      const cases = new Set(this.ratesDe(id).map(([rk]) => rk.slice(id.length + 1)))
-      const lies = Object.keys(this.contestes).filter(o => o === id || this.ratesDe(o).some(([rk]) => cases.has(rk.slice(o.length + 1))))
-      for (const o of lies) await this.resolve(o)
+      await this.resolve(id)
       this.sendConf()
       return
     }

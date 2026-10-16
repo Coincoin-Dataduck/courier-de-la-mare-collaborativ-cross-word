@@ -387,8 +387,6 @@ body.clav-on .ctoast{bottom:230px}
 .fil{max-height:9.6em;overflow-y:auto;overscroll-behavior:contain}
 
 /* lettres « pas sûr » */
-.g .c svg.dqc{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
-.g .c svg.dqc path{fill:none;stroke:#b3261e;stroke-width:5;stroke-linecap:round;opacity:.85}
 .g .c u.dq{position:absolute;right:6%;bottom:2%;font:700 calc(var(--cs) * .34) Century,serif;text-decoration:none;line-height:1;pointer-events:none}
 .dlabel em.adq,.lst em.adq,li em.adq{font-style:italic;color:#8a5208}.dlabel em.adq{font-style:normal}
 .m-dq{border:1px dashed #24211d;background:transparent;color:#24211d;padding:5px 10px;font:700 11px Narrow,sans-serif;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;line-height:1.1;align-self:center}
@@ -401,3 +399,22 @@ body.enjeu .m-dq small{display:none}
 .clav.crayon .dqk{visibility:hidden}
 
 #conflit button[hidden]{display:none}
+
+/* ---------- la correction (stylo bic rouge : trait plein, sans grain) ---------- */
+.g .c svg.barre{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.g .c svg.barre path{fill:none;stroke:#c41a12;stroke-width:4;stroke-linecap:round}
+.g .c .rc{position:absolute;right:5%;top:-2%;font:calc(var(--cs) * .5)/1 Crayon,cursive;color:#c41a12;text-transform:uppercase;pointer-events:none}
+.g .c i.sv{color:#c41a12!important;font-family:Crayon,cursive;font-weight:400;font-size:calc(var(--cs) * .78);text-transform:uppercase}
+.corr-bar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:0 0 10px}
+.corr-bar .tog{display:inline-flex;border:1.5px solid #24211d}
+.corr-bar .tog button{font:700 11px Narrow,sans-serif;letter-spacing:.1em;text-transform:uppercase;padding:6px 10px;background:none;border:0;color:#24211d;cursor:pointer}
+.corr-bar .tog button.on{background:#24211d;color:#ebe6da}
+.corr-bar .note{position:relative;font:700 26px/1 Century,serif;color:#c41a12;padding:0 4px 6px;transform:rotate(-4deg)}
+.corr-bar .note svg{position:absolute;left:-4px;right:-6px;bottom:-2px;width:calc(100% + 10px);height:12px;overflow:visible}
+.corr-bar .note path{fill:none;stroke:#c41a12;stroke-width:2.6;stroke-linecap:round;vector-effect:non-scaling-stroke}
+.defs li .faux{text-decoration:underline 2px #c41a12;text-underline-offset:3px}
+.defs li em.rep{font-style:normal;font-weight:700;color:#c41a12;letter-spacing:.06em;margin-left:4px}
+.fil p.corr{color:#c41a12;font-style:italic}
+.ed .c i.sl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font:700 calc(var(--cs) * .62)/1 Century,serif;font-style:normal;color:#24211d;pointer-events:none}
+.ed:not(.sol) .c i.sl{display:none}
+.ed.sol .c{cursor:text}

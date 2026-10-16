@@ -12,6 +12,9 @@ let PC = {}, PCby = {}          // crayon de bois : partagé, ne compte pas
 try { localStorage.removeItem('cdlm:pc:' + gid) } catch {}
 let me = load('cdlm:me')
 let abandon = null, foundSet = new Set(), contestes = {}, ratures = {}
+// Grille corrigée : corr = { justes, total, fautes }, sol = la solution ; voirSol = interrupteur « La solution »
+let corr = null, sol = null, voirSol = false
+const ferme = () => !!(abandon || corr)
 let sel = null, mode = 'ink', ws = null, wsTry = 0, cs = 18, el = [], done = false
 
 function load(k) { try { return JSON.parse(localStorage.getItem(k)) } catch { return null } }
@@ -34,7 +37,7 @@ async function start() {
 function perdu() { $('journal').classList.add('hide'); $('accueil').classList.add('hide'); $('perdu').classList.remove('hide'); document.title = 'Grille introuvable — Le Courrier de la Mare' }
 
 function apply(st) {
-  meta = st.meta; abandon = st.abandon || null; foundSet = new Set(st.foundIds || []); cells = st.cells || {}; players = st.players || {}; scores = st.scores || {}; feed = st.feed || []; contestes = st.contestes || {}; ratures = st.ratures || {}
+  meta = st.meta; abandon = st.abandon || null; corr = st.corr || null; sol = st.sol || null; foundSet = new Set(st.foundIds || []); cells = st.cells || {}; players = st.players || {}; scores = st.scores || {}; feed = st.feed || []; contestes = st.contestes || {}; ratures = st.ratures || {}
   W = words(meta); byCell = {}
   for (const w of [...W.h, ...W.v]) for (const [r, c] of w.cells) (byCell[key(r, c)] ||= {})[w.d] = w
   meta.clues = meta.clues || {}
@@ -72,6 +75,20 @@ function verso() {
 }
 
 // ---------- la grille ----------
+function barreCorr() {
+  let b = $('corr-bar')
+  if (!corr || !sol) { if (b) b.remove(); return }
+  if (!b) { b = document.createElement('div'); b.id = 'corr-bar'; b.className = 'corr-bar'; $('vp').parentElement.insertBefore(b, $('vp')) }
+  const n = corr.total - corr.fautes
+  b.innerHTML = '<div class="tog"><button data-v="0" class="' + (voirSol ? '' : 'on') + '">Notre grille</button><button data-v="1" class="' + (voirSol ? 'on' : '') + '">La solution</button></div>' +
+    '<div class="note" title="Mots justes">' + n + '/' + corr.total + '<svg viewBox="0 0 100 20" preserveAspectRatio="none"><path d="M4 13 Q40 8 76 11 Q88 12 96 9"/></svg></div>'
+  b.onclick = e => {
+    const t = e.target.closest('button'); if (!t) return
+    voirSol = t.dataset.v === '1'
+    for (let r = 0; r < meta.rows; r++) for (let c = 0; c < meta.cols; c++) draw(r, c)
+    barreCorr()
+  }
+}
 function build() {
   masthead()
   const g = $('g'), R = meta.rows, C = meta.cols
@@ -92,6 +109,7 @@ function build() {
   const first = W.h[0] || W.v[0]
   if (first) { sel = { r: first.cells[0][0], c: first.cells[0][1], d: first.d }; refresh(false) }
   ranking(); fil(); progress(false)
+  barreCorr()
 }
 function fit() {
   const vp = $('vp')
@@ -101,25 +119,25 @@ function fit() {
 }
 function setCs() { const g = $('g'); g.style.setProperty('--cs', cs + 'px'); g.style.setProperty('--lab', Math.max(18, Math.round(cs * 1.1)) + 'px') }
 
-// Cercle rouge à main levée autour d'une lettre « pas sûr » (toujours le même pour une case donnée)
-function cercle(r, c) {
-  let s = r * 31 + c * 7 + 3
-  const R = () => (s = (s * 9301 + 49297) % 233280) / 233280
-  const pts = [], n = 28, a0 = -1.9 + R() * .6, tour = 2 * Math.PI + .35 + R() * .3
-  const rx = 41 + R() * 4, ry = 37 + R() * 4, rot = (R() - .5) * 18
-  for (let i = 0; i <= n; i++) { const t = a0 + tour * i / n, w = 1 + (R() - .5) * .06 + (i / n) * .06; pts.push([50 + Math.cos(t) * rx * w, 52 + Math.sin(t) * ry * w]) }
-  const f = p => p.map(x => x.toFixed(1)).join(' ')
-  let d = 'M' + f(pts[0])
-  for (let i = 1; i < pts.length - 1; i++) d += ' Q' + f(pts[i]) + ' ' + f([(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2])
-  return '<svg class="dqc" viewBox="0 0 100 100"><path d="' + d + '" transform="rotate(' + rot.toFixed(1) + ' 50 50)"/></svg>'
+// Trait de bic rouge qui barre une lettre fausse
+function barre(r, c) {
+  const z = r * 7 + c, a = 16 + z % 5, b = 84 - z % 4
+  return '<svg class="barre" viewBox="0 0 100 100"><path d="M' + a + ' ' + (b - 2) + ' Q50 ' + (52 + z % 6) + ' ' + b + ' ' + (a + 4) + '"/></svg>'
 }
 function draw(r, c, anim) {
   const e = el[r][c], k = key(r, c), v = cells[k], p = PC[k]
   if (isBlack(meta, r, c)) return
   const nb = W.nums[k] ? '<b class="num">' + W.nums[k] + '</b>' : ''
+  if (corr && sol) {
+    const s = sol[r * meta.cols + c], pl = v && (players[v.pid] || { name: '?', color: '#24211d' })
+    if (voirSol) e.innerHTML = nb + '<i style="color:#24211d">' + s + '</i>'
+    else if (!v) e.innerHTML = nb + '<i class="sv">' + s + '</i>'
+    else e.innerHTML = nb + '<i title="' + esc(pl.name) + '" style="color:' + pl.color + '">' + v.ch + '</i>' + (v.ch === s ? '' : barre(r, c) + '<span class="rc">' + s + '</span>')
+    return
+  }
   if (v) {
     const pl = players[v.pid] || { name: '?', color: '#24211d' }
-    e.innerHTML = nb + '<i' + (anim ? ' class="st"' : '') + ' title="' + esc(pl.name) + (v.dq ? ' (pas sûr)' : '') + '" style="color:' + pl.color + '">' + v.ch + '</i>' + (v.dq ? cercle(r, c) + '<u class="dq" style="color:' + pl.color + '">?</u>' : '')
+    e.innerHTML = nb + '<i' + (anim ? ' class="st"' : '') + ' title="' + esc(pl.name) + (v.dq ? ' (pas sûr)' : '') + '" style="color:' + pl.color + '">' + v.ch + '</i>' + (v.dq ? '<u class="dq" style="color:' + pl.color + '">?</u>' : '')
   } else if (p) e.innerHTML = nb + '<i class="pc' + (anim ? ' dr' : '') + '" style="color:' + ((players[PCby[k]] || {}).color || '#4f4c47') + '" title="Au crayon : ' + esc((players[PCby[k]] || {}).name || '?') + '">' + p + '</i>'
   else e.innerHTML = nb
   const ra = ratureDe(k)
@@ -135,7 +153,7 @@ function draw(r, c, anim) {
 // Lettres « pas sûr » : cells[k].dq
 const doutW = w => w.cells.some(([r, c]) => (cells[key(r, c)] || {}).dq)
 function douter() {
-  if (!sel || !me || abandon || mode === 'pc') return
+  if (!sel || !me || ferme() || mode === 'pc') return
   const k = key(sel.r, sel.c), v = cells[k]
   if (v) { const on = !v.dq; if (on) v.dq = 1; else delete v.dq; send({ t: 'doute', r: sel.r, c: sel.c, on }); draw(sel.r, sel.c); updLines(sel.r, sel.c) }
   refresh(false); kbFocus()
@@ -188,7 +206,7 @@ function refresh(scroll = true) {
       $('cf-re').onclick = act('remettre'); $('cf-ok').onclick = act('cestbon'); $('cf-ef').onclick = act('nettoyer')
       cf.addEventListener('pointerdown', e => e.preventDefault())
     }
-    cf.dataset.id = w.id; cf.classList.toggle('on', !!x && !abandon)
+    cf.dataset.id = w.id; cf.classList.toggle('on', !!x && !ferme())
     $('cf-ef').hidden = !(x && x.tenu)
     majDq()
     $('dtext').innerHTML = esc(defOf(w)) + ' <span style="color:#8a8273">(' + w.cells.length + ')</span>'
@@ -214,10 +232,15 @@ function patTxt(w) {
 }
 const complet = w => w.cells.every(([r, c]) => cells[key(r, c)])
 function liHTML(w) {
+  if (corr && sol) {
+    const sw = w.cells.map(([r, c]) => sol[r * meta.cols + c]).join('')
+    return corr.justes[w.id] ? '<b>' + w.n + '.</b> <span>' + esc(defOf(w)) + '</span> <em class="ln">(' + w.cells.length + ')</em>'
+      : '<b>' + w.n + '.</b> <span class="faux">' + esc(defOf(w)) + '</span> <em class="rep">' + sw + '</em>'
+  }
   return '<b>' + w.n + '.</b> <span>' + esc(defOf(w)) + '</span> <em class="ln">(' + w.cells.length + ')</em>' + patTxt(w) + (contestes[w.id] ? ' <em class="arv">contesté</em>' : doutW(w) ? ' <em class="adq">un doute</em>' : '')
 }
 function list(d, ol) {
-  ol.innerHTML = W[d].map(w => '<li data-id="' + w.id + '"' + (okW(w) ? ' class="ok"' : '') + '>' + liHTML(w) + '</li>').join('')
+  ol.innerHTML = W[d].map(w => '<li data-id="' + w.id + '"' + (okW(w) && !corr ? ' class="ok"' : '') + '>' + liHTML(w) + '</li>').join('')
   ol.onclick = e => {
     const li = e.target.closest('li'); if (!li) return
     const w = W.byId[li.dataset.id]; if (!w) return
@@ -254,7 +277,7 @@ function nextWord(dir) {
   const x = all[i]; sel = { r: x.cells[0][0], c: x.cells[0][1], d: x.d }; refresh()
 }
 function type(ch) {
-  if (!sel || !me || abandon) return
+  if (!sel || !me || ferme()) return
   const k = key(sel.r, sel.c)
   if (mode === 'pc') {
     if (cells[k]) { step(1); refresh(); return } // on n'écrit pas au crayon par-dessus la machine
@@ -270,7 +293,7 @@ function type(ch) {
   step(1); refresh()
 }
 function erase(back) {
-  if (!sel || abandon) return
+  if (!sel || ferme()) return
   let k = key(sel.r, sel.c)
   if (back && !cells[k] && !PC[k]) { step(-1); k = key(sel.r, sel.c) }
   if (PC[k] && (mode === 'pc' || !cells[k])) { delete PC[k]; delete PCby[k]; send({ t: 'pc', r: sel.r, c: sel.c, ch: null }) }
@@ -343,7 +366,7 @@ function ranking() {
   const ids = Object.keys(players).filter(p => (scores[p] || 0) > 0 || online.has(p) || (me && p === me.pid))
   ids.sort((a, b) => (scores[b] || 0) - (scores[a] || 0) || players[a].name.localeCompare(players[b].name))
   const top = ids.slice(0, 10)
-  $('cl').innerHTML = top.map(p => '<li class="' + (me && p === me.pid ? 'moi' : '') + (online.has(p) ? '' : ' off') + '"><i style="background:' + players[p].color + '"></i>' + esc(players[p].name) + '<b>' + (scores[p] || 0) + ' mot' + ((scores[p] || 0) > 1 ? 's' : '') + '</b></li>').join('') +
+  $('cl').innerHTML = top.map(p => '<li class="' + (me && p === me.pid ? 'moi' : '') + (online.has(p) ? '' : ' off') + '"><i style="background:' + players[p].color + '"></i>' + esc(players[p].name) + '<b>' + (scores[p] || 0) + ' mot' + ((scores[p] || 0) > 1 ? 's' : '') + (corr ? ' juste' + ((scores[p] || 0) > 1 ? 's' : '') : '') + '</b></li>').join('') +
     (ids.length > 10 ? '<li class="plus">et ' + (ids.length - 10) + ' autres</li>' : '')
   if (!top.length) $('cl').innerHTML = '<li class="plus">Personne n’a encore trouvé de mot.</li>'
   chapeau()
@@ -355,6 +378,7 @@ const nom = pid => { const p = players[pid] || { name: '?', color: '#24211d' }; 
 function fil(newest) {
   $('fil').innerHTML = feed.slice(0, 30).map((f, i) => {
     const cl = i === 0 && newest ? ' class="new"' : ''
+    if (f.t === 'correcteur') return '<p class="corr' + (cl ? ' new' : '') + '">Le correcteur est passé · ' + (f.fautes ? f.fautes + ' faute' + (f.fautes > 1 ? 's' : '') : 'aucune faute') + '.</p>'
     if (f.t === 'conteste') { const b = nom(f.by); return '<p' + cl + '>' + b + ' a changé <span class="x">' + esc(f.word || '') + '</span>' + (f.pid && f.pid !== f.by ? ' de ' + nom(f.pid) : '') + '.</p>' }
     const p = players[f.pid] || { name: '?', color: '#24211d' }; return '<p' + cl + '><b style="color:' + p.color + '">' + esc(p.name) + '</b> a trouvé ' + esc(f.word) + ' en ' + sens(f.id) + '.</p>' }).join('')
 }
@@ -364,8 +388,9 @@ function progress(anim) {
   const pct = tot ? Math.floor(ink * 100 / tot) : 0
   $('j-info').textContent = 'N° ' + meta.numero + ' · ' + pct + ' %'
   $('avance').textContent = pct + ' % de la grille est rempli.'
-  // Tous les mots trouvés : double tamponné. Abandonnée par l'admin : tamponné seulement.
-  const nW = W.h.length + W.v.length, dbl = nW > 0 && foundSet.size >= nW, fin = dbl || !!abandon
+  // Tamponné : tous les mots trouvés sans conflit, ou abandonnée. Double tamponné : corrigée sans faute.
+  const nW = W.h.length + W.v.length, tout = nW > 0 && foundSet.size >= nW && !Object.keys(contestes).length
+  const dbl = !!corr && !corr.fautes, fin = !!corr || !!abandon || tout
   const t = $('tampons'); t.classList.toggle('simple', !dbl)
   if (fin && !done) { if (!anim) t.style.setProperty('--x', 0); t.classList.add('on') }
   if (!fin) t.classList.remove('on')
@@ -463,7 +488,7 @@ function on(m) {
         if (!me || x.by !== me.pid) toast('<b>Rature</b>' + esc((players[x.by] || { name: '?' }).name) + ' a changé ' + esc(x.word || sens(x.id)))
       }
       if ((m.casse || []).length) fil(true)
-      majConf(); break
+      majConf(); progress(true); break
     }
     case 'reload': { location.reload(); break }
     case 'deleted': { perdu(); break }

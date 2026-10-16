@@ -18,6 +18,8 @@ let R = 15, C = 15, B = ''
 let clues = {}
 let W = null, el = []
 let mode = 'noir', act = null, dirty = false
+// La solution : S = une lettre par case ('#' noire, ' ' vide), lettres = celles des joueurs, solCur = la case où l'on tape
+let S = '', lettres = {}, solCur = null, corrInfo = null
 
 async function api(path = '', opt = {}) {
   const r = await fetch(API + path, { ...opt, headers: { 'content-type': 'application/json' } })
@@ -36,7 +38,7 @@ async function liste() {
   const K = {}
   try { for (const k of await (await fetch('/api/kiosque')).json()) K[k.id] = k } catch {}
   const etat = g => { const k = K[g.id] || {}
-    if (k.fin === 'double') return '<span class="st2">Double tamponné</span>'
+    if (k.corr) return '<span class="st' + (k.fin === 'double' ? '2' : '1') + '">Corrigée · ' + (k.corr.fautes ? k.corr.fautes + ' faute' + (k.corr.fautes > 1 ? 's' : '') : 'sans faute') + '</span>'
     if (k.abandon) return '<span class="st1">Tamponné</span> <button class="pbtn" data-ab="' + g.id + '" data-on="0">Reprendre</button>'
     return (k.pct || 0) + ' % <button class="pbtn" data-ab="' + g.id + '" data-on="1" data-n="' + g.numero + '">Abandonner</button>' }
   $('cpt').textContent = gs.length + ' grille' + (gs.length > 1 ? 's' : '')
@@ -69,6 +71,8 @@ async function ouvrir(id) {
   let m = null, info = null
   if (id) { try { info = await api('/' + id); m = info.meta } catch (e) { alert(e.message); return } }
   cur = m
+  lettres = (info && info.lettres) || {}; corrInfo = (info && info.corr) || null; S = (info && info.sol) || ''; solCur = null
+  $('m-sol').classList.toggle('hide', !m)
   R = m ? m.rows : 15; C = m ? m.cols : 15; B = m ? m.blacks : '0'.repeat(R * C)
   clues = { ...((m && m.clues) || {}) }
   $('ed-titre').textContent = m ? 'Grille n° ' + m.numero : 'Nouvelle grille'
@@ -92,7 +96,10 @@ function setBlack(r, c, v) { const i = r * C + c; B = B.slice(0, i) + (v ? '1' :
 function setMode(m) {
   mode = m
   for (const b of $('ed-mode').querySelectorAll('button')) b.classList.toggle('on', b.dataset.m === m)
-  $('ed-g').classList.toggle('def', m === 'def')
+  $('ed-g').classList.toggle('def', m === 'def'); $('ed-g').classList.toggle('sol', m === 'sol')
+  $('ed-corr').classList.toggle('hide', m !== 'sol'); $('ed-decorr').classList.toggle('hide', m !== 'sol' || !corrInfo)
+  if (m === 'sol') { infoSol(); hl(); return }
+  solCur = null
   $('ed-aide').textContent = m === 'noir'
     ? 'Clique ou glisse sur les cases pour les noircir ou les blanchir. Avec la symétrie, la case opposée suit (demi-tour, comme dans les journaux).'
     : 'Clique sur une case pour écrire la définition de son mot (clique encore pour passer d’horizontal à vertical). Entrée passe au mot suivant.'
@@ -101,6 +108,7 @@ $('ed-mode').onclick = e => { const b = e.target.closest('button'); if (b) setMo
 
 function grille() {
   W = words(meta())
+  S = Array.from({ length: R * C }, (_, i) => B[i] === '1' ? '#' : S.length === R * C && S[i] !== '#' ? S[i] : ' ').join('')
   const g = $('ed-g'), cs = Math.max(16, Math.min(34, Math.floor((g.parentElement.clientWidth - 20) / C)))
   g.style.setProperty('--cs', cs + 'px')
   g.style.gridTemplateColumns = 'repeat(' + C + ',var(--cs))'
@@ -108,7 +116,7 @@ function grille() {
   for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
     const cl = ['c']; if (black(r, c)) cl.push('n'); if (r === 0) cl.push('top'); if (c === 0) cl.push('left'); if (c === C - 1) cl.push('right'); if (r === R - 1) cl.push('bot')
     const n = W.nums[r + ',' + c]
-    h += '<div class="' + cl.join(' ') + '" data-r="' + r + '" data-c="' + c + '">' + (n ? '<b class="num">' + n + '</b>' : '') + '</div>'
+    h += '<div class="' + cl.join(' ') + '" data-r="' + r + '" data-c="' + c + '">' + (n ? '<b class="num">' + n + '</b>' : '') + (black(r, c) ? '' : '<i class="sl">' + S[r * C + c].trim() + '</i>') + '</div>'
   }
   g.innerHTML = h
   el = []; g.querySelectorAll('.c').forEach(e => { (el[+e.dataset.r] ||= [])[+e.dataset.c] = e })
@@ -119,9 +127,10 @@ function grille() {
 function renum() {
   W = words(meta())
   for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
-    const n = W.nums[r + ',' + c], e = el[r][c], b = e.firstChild
-    if (n) { if (!b) e.innerHTML = '<b class="num">' + n + '</b>'; else if (b.textContent != n) b.textContent = n }
-    else if (b) e.innerHTML = ''
+    const n = W.nums[r + ',' + c], e = el[r][c]
+    const nb = e.querySelector('b.num')
+    if (n) { if (!nb) e.insertAdjacentHTML('afterbegin', '<b class="num">' + n + '</b>'); else if (nb.textContent != n) nb.textContent = n }
+    else if (nb) nb.remove()
   }
 }
 
@@ -142,6 +151,12 @@ function manque() {
 function hl(scroll) {
   document.querySelectorAll('#ed-g .c.hl,#ed-g .c.hs').forEach(e => e.classList.remove('hl', 'hs'))
   document.querySelectorAll('.dl p.act').forEach(e => e.classList.remove('act'))
+  if (mode === 'sol') {
+    if (!solCur) return
+    const k = solCur.r + ',' + solCur.c, w = W[solCur.d].find(x => x.cells.some(([a, b]) => a + ',' + b === k))
+    if (w) w.cells.forEach(([a, b]) => el[a][b].classList.add('hl'))
+    el[solCur.r][solCur.c].classList.add('hs'); return
+  }
   const w = act && W.byId[act]; if (!w) return
   w.cells.forEach(([r, c], i) => el[r][c].classList.add(i ? 'hl' : 'hs'))
   const p = document.querySelector('.dl p[data-id="' + w.id + '"]')
@@ -177,6 +192,12 @@ for (const d of ['h', 'v']) {
   g.addEventListener('pointerdown', e => {
     const x = at(e); if (!x) return
     const r = +x.dataset.r, c = +x.dataset.c
+    if (mode === 'sol') {
+      if (black(r, c)) return
+      e.preventDefault()
+      solCur = solCur && solCur.r === r && solCur.c === c ? { r, c, d: solCur.d === 'h' ? 'v' : 'h' } : { r, c, d: (solCur && solCur.d) || 'h' }
+      hl(); return
+    }
     if (mode === 'def') {
       if (black(r, c)) return
       const k = r + ',' + c, cand = [...W.h, ...W.v].filter(w => w.cells.some(([a, b]) => a + ',' + b === k))
@@ -197,6 +218,62 @@ for (const d of ['h', 'v']) {
   const stop = () => { if (paint !== null) { paint = null; dirty = true; grille() } }
   g.addEventListener('pointerup', stop); g.addEventListener('pointercancel', stop)
   g.style.touchAction = 'none'
+}
+// ---------- la solution ----------
+function infoSol() {
+  let reste = 0, diff = 0
+  for (let i = 0; i < R * C; i++) {
+    if (S[i] === ' ') reste++
+    const l = lettres[Math.floor(i / C) + ',' + (i % C)]
+    if (l && S[i] !== ' ' && S[i] !== '#' && l !== S[i]) diff++
+  }
+  $('ed-aide').textContent = (corrInfo ? 'Grille corrigée : ' + (corrInfo.total - corrInfo.fautes) + '/' + corrInfo.total + ' mots justes. ' : '') +
+    'Clique sur une case et tape la solution, le curseur avance tout seul. Clique encore sur la case (ou Entrée) pour changer de sens. ' +
+    (reste ? reste + ' case' + (reste > 1 ? 's' : '') + ' à remplir' : 'Solution complète') + ' · ' + diff + ' différence' + (diff > 1 ? 's' : '') + ' avec la grille des joueurs.'
+  return reste
+}
+function setS(r, c, ch) {
+  const i = r * C + c; S = S.slice(0, i) + ch + S.slice(i + 1)
+  el[r][c].querySelector('i.sl').textContent = ch.trim(); infoSol()
+}
+// case blanche suivante (dir = 1) ou précédente (dir = -1) dans le sens d'écriture
+function voisine(r, c, d, dir) {
+  const N = R * C
+  let i = d === 'h' ? r * C + c : c * R + r
+  for (let n = 0; n < N; n++) {
+    i += dir; if (i < 0 || i >= N) return null
+    const a = d === 'h' ? Math.floor(i / C) : i % R, b = d === 'h' ? i % C : Math.floor(i / R)
+    if (!black(a, b)) return { r: a, c: b, d }
+  }
+  return null
+}
+addEventListener('keydown', e => {
+  if (mode !== 'sol' || !solCur || e.target.closest('input,textarea') || e.metaKey || e.ctrlKey) return
+  const { r, c, d } = solCur, k = e.key
+  if (/^[a-z]$/i.test(k)) { setS(r, c, k.toUpperCase()); solCur = voisine(r, c, d, 1) || solCur }
+  else if (k === 'Backspace') { if (S[r * C + c] !== ' ') setS(r, c, ' '); else { const p = voisine(r, c, d, -1); if (p) { solCur = p; setS(p.r, p.c, ' ') } } }
+  else if (k === 'Delete' || k === ' ') setS(r, c, ' ')
+  else if (k === 'Enter') solCur = { r, c, d: d === 'h' ? 'v' : 'h' }
+  else if (k === 'ArrowRight' || k === 'ArrowLeft') solCur = voisine(r, c, 'h', k === 'ArrowRight' ? 1 : -1) || solCur
+  else if (k === 'ArrowDown' || k === 'ArrowUp') solCur = { ...(voisine(r, c, 'v', k === 'ArrowDown' ? 1 : -1) || solCur), d }
+  else return
+  e.preventDefault(); hl()
+})
+$('ed-corr').onclick = async () => {
+  if (!cur) return
+  if (dirty) { alert('Enregistre d’abord la grille.'); return }
+  const reste = infoSol()
+  if (reste) { alert('Il reste ' + reste + ' case' + (reste > 1 ? 's' : '') + ' sans lettre.'); return }
+  if (!confirm('Corriger la grille n° ' + cur.numero + ' ? Elle sera archivée : plus personne ne pourra y écrire, et les doutes seront effacés.')) return
+  try {
+    const k = await api('/' + cur.id + '/solution', { method: 'POST', body: JSON.stringify({ sol: S }) })
+    corrInfo = k.corr; setMode('sol')
+    $('ed-etat').textContent = 'Corrigée : ' + (k.corr.total - k.corr.fautes) + '/' + k.corr.total + ' mots justes' + (k.corr.fautes ? '.' : ', double tamponnée !')
+  } catch (err) { alert(err.message) }
+}
+$('ed-decorr').onclick = async () => {
+  if (!cur || !confirm('Retirer la correction ? La grille redevient jouable. Les doutes effacés ne reviennent pas.')) return
+  try { await api('/' + cur.id + '/solution', { method: 'DELETE' }); corrInfo = null; setMode('sol'); $('ed-etat').textContent = 'Correction retirée.' } catch (err) { alert(err.message) }
 }
 $('ed-vider').onclick = () => { if (!confirm('Blanchir toute la grille ?')) return; B = '0'.repeat(R * C); dirty = true; grille() }
 $('f-taille').onclick = () => {

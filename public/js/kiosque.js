@@ -33,7 +33,7 @@ function mini(g) {
 function carte(g) {
   const rot = ((g.numero * 37) % 7 - 3) * 0.6
   const stp = g.fin === 'double' ? '<div class="stp d">Double tamponné</div>' : g.fin === 'simple' ? '<div class="stp">Tamponné</div>' : ''
-  const etat = g.fin === 'double' ? 'Tous les mots trouvés' : g.fin === 'simple' ? 'Abandonnée à ' + g.pct + ' %' : g.pct + ' % rempli'
+  const etat = g.corr ? 'Corrigée · ' + (g.corr.fautes ? g.corr.fautes + ' faute' + (g.corr.fautes > 1 ? 's' : '') : 'sans faute') : g.abandon ? 'Abandonnée à ' + g.pct + ' %' : g.fin ? 'Tous les mots trouvés' : g.pct + ' % rempli'
   const best = g.best ? 'Le plus fort : <span class="dot" style="background:' + esc(g.best.color) + '"></span><b style="color:' + esc(g.best.color) + '">' + esc(g.best.name) + '</b> (' + g.best.n + ' mot' + (g.best.n > 1 ? 's' : '') + ')' : 'Personne n’a encore trouvé de mot.'
   return '<a class="mu' + (g.fin ? '' : ' cours') + '" href="/g/' + g.id + '" style="--r:' + rot + 'deg">' +
     '<div class="mt"><span>N° ' + g.numero + '</span><span>' + parution(g) + '</span></div>' +

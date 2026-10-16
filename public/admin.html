@@ -55,7 +55,7 @@
 
     <p class="k">2. La grille</p>
     <div class="outils">
-      <div class="mode" id="ed-mode"><button class="on" data-m="noir">Cases noires</button><button data-m="def">Définitions</button></div>
+      <div class="mode" id="ed-mode"><button class="on" data-m="noir">Cases noires</button><button data-m="def">Définitions</button><button data-m="sol" id="m-sol" class="hide">Solution</button></div>
       <label class="sym"><input type="checkbox" id="ed-sym" checked> Symétrie</label>
       <span class="etat" id="ed-compte"></span><button class="pbtn" id="ed-vider">Tout blanchir</button>
     </div>
@@ -83,7 +83,7 @@
       <label class="l4">Petites annonces<small>Une annonce par ligne. La première phrase s'imprime en gras.</small><textarea id="f-pa" spellcheck="true"></textarea></label>
     </div>
 
-    <div class="barre"><span class="etat" id="ed-etat"></span><a class="pbtn hide" id="ed-voir" target="_blank" rel="noopener">Ouvrir la grille</a><button class="pbtn vert" id="ed-save">Enregistrer</button></div>
+    <div class="barre"><span class="etat" id="ed-etat"></span><a class="pbtn hide" id="ed-voir" target="_blank" rel="noopener">Ouvrir la grille</a><button class="pbtn hide" id="ed-decorr">Retirer la correction</button><button class="pbtn rouge hide" id="ed-corr">Corriger la grille</button><button class="pbtn vert" id="ed-save">Enregistrer</button></div>
   </div>
   <footer class="ours">
     <p>Directeur de la publication : <b>Rocket</b>. Imprimé par <b>le Canard</b>, sous la direction d'<b>Astra</b>.</p>
