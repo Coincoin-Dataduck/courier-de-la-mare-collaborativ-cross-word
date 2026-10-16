@@ -34,7 +34,7 @@ export function composer(grilles, { hier, aujourdhui, site = '', types = {} }) {
   }
   if (T.corrigees && corrigees.length) {
     L.push('', titre(corrigees.length, 'Grille corrigée', 'Grilles corrigées'))
-    for (const d of corrigees) L.push('· ' + lien(d) + ' : ' + d.corr.mots + '/' + d.corr.total + ', ' + (d.corr.fautes ? pl(d.corr.fautes, 'faute') + '.' : 'sans faute, double tamponnée !') + (d.classement.length ? ' Mots justes : ' + top(d) + '.' : ''))
+    for (const d of corrigees) L.push('· ' + lien(d) + ' : ' + (d.corr.cases - d.corr.fautes) + '/' + d.corr.cases + ', ' + (d.corr.fautes ? pl(d.corr.fautes, 'faute') + '.' : 'sans faute, double tamponnée !') + (d.classement.length ? ' Mots justes : ' + top(d) + '.' : ''))
   }
   if (T.enCours && enCours.length) {
     L.push('', '**Toujours en cours**')

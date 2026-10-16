@@ -230,7 +230,7 @@ function infoSol() {
     const l = lettres[Math.floor(i / C) + ',' + (i % C)]
     if (l && S[i] !== ' ' && S[i] !== '#' && l !== S[i]) diff++
   }
-  $('ed-aide').textContent = (corrInfo ? 'Grille corrigée : ' + corrInfo.mots + '/' + corrInfo.total + ' mots justes. ' : '') +
+  $('ed-aide').textContent = (corrInfo ? 'Grille corrigée : ' + (corrInfo.cases - corrInfo.fautes) + '/' + corrInfo.cases + ' lettres justes. ' : '') +
     'Clique sur une case et tape la solution, le curseur avance tout seul. Clique encore sur la case (ou Entrée) pour changer de sens. ' +
     (reste ? reste + ' case' + (reste > 1 ? 's' : '') + ' à remplir' : 'Solution complète') + ' · ' + diff + ' différence' + (diff > 1 ? 's' : '') + ' avec la grille des joueurs.'
   return reste
@@ -281,7 +281,7 @@ $('ed-corr').onclick = async () => {
   try {
     const k = await api('/' + cur.id + '/solution', { method: 'POST', body: JSON.stringify({ sol: S }) })
     corrInfo = k.corr; setMode('sol')
-    $('ed-etat').textContent = 'Corrigée : ' + k.corr.mots + '/' + k.corr.total + ' mots justes' + (k.corr.fautes ? '.' : ', double tamponnée !')
+    $('ed-etat').textContent = 'Corrigée : ' + (k.corr.cases - k.corr.fautes) + '/' + k.corr.cases + ' lettres justes' + (k.corr.fautes ? '.' : ', double tamponnée !')
   } catch (err) { alert(err.message) }
 }
 $('ed-decorr').onclick = async () => {
