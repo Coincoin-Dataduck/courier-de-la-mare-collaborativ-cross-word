@@ -401,10 +401,9 @@ body.enjeu .m-dq small{display:none}
 #conflit button[hidden]{display:none}
 
 /* ---------- la correction (stylo bic rouge : trait plein, sans grain) ---------- */
-.g .c svg.barre{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
-.g .c svg.barre path{fill:none;stroke:#c41a12;stroke-width:4;stroke-linecap:round}
-.g .c .rc{position:absolute;right:5%;top:-2%;font:calc(var(--cs) * .5)/1 Crayon,cursive;color:#c41a12;text-transform:uppercase;pointer-events:none}
-.g .c i.sv{color:#c41a12!important;font-family:Crayon,cursive;font-weight:400;font-size:calc(var(--cs) * .78);text-transform:uppercase}
+.g .c span.rature-rouge{position:absolute;left:8%;top:50%;width:84%;height:0;border-top:calc(var(--cs) * .075) solid #c41a12;border-radius:2px;pointer-events:none;z-index:2}
+.g .c .rc{position:absolute;right:4%;top:1%;z-index:3;font:400 calc(var(--cs) * .62)/1 Crayon,cursive;color:#c41a12;text-transform:uppercase;pointer-events:none}
+.g .c i.sv{color:#c41a12!important;font:400 calc(var(--cs) * 1.02)/1 Crayon,cursive;text-shadow:none;opacity:1;text-transform:uppercase}
 .corr-bar{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:0 0 10px}
 .corr-bar .tog{display:inline-flex;border:1.5px solid #24211d}
 .corr-bar .tog button{font:700 11px Narrow,sans-serif;letter-spacing:.1em;text-transform:uppercase;padding:6px 10px;background:none;border:0;color:#24211d;cursor:pointer}

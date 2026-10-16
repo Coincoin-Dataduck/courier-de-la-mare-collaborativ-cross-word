@@ -121,8 +121,8 @@ function setCs() { const g = $('g'); g.style.setProperty('--cs', cs + 'px'); g.s
 
 // Trait de bic rouge qui barre une lettre fausse
 function barre(r, c) {
-  const z = r * 7 + c, a = 16 + z % 5, b = 84 - z % 4
-  return '<svg class="barre" viewBox="0 0 100 100"><path d="M' + a + ' ' + (b - 2) + ' Q50 ' + (52 + z % 6) + ' ' + b + ' ' + (a + 4) + '"/></svg>'
+  const z = r * 7 + c
+  return '<span class="rature-rouge" style="transform:rotate(' + (-38 - z % 9) + 'deg)"></span>'
 }
 function draw(r, c, anim) {
   const e = el[r][c], k = key(r, c), v = cells[k], p = PC[k]
