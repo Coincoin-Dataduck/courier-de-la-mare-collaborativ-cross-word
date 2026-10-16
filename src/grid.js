@@ -19,10 +19,11 @@ export class Grid {
     this.found = Object.fromEntries([...(await st.list({ prefix: 'f:' }))].map(([k, v]) => [k.slice(2), v]))
     this.abandon = (await st.get('abandon')) || null   // date d'abandon (admin) : grille tamponnée, plus d'écriture
     this.last = (await st.get('last')) || null         // date de la dernière lettre
-    // Correction : sol = la solution (cases noires = '#'), corr = { ts, justes: { mot: pid|null }, total, fautes }
+    // Correction : sol = la solution (cases noires = '#'), corr = { ts, justes: { mot: pid|null }, total, mots (justes), fautes (lettres) }
     this.sol = (await st.get('sol')) || null
     this.corr = (await st.get('corr')) || null
     this.brouillon = (await st.get('brouillon')) || ''   // solution en cours de saisie, jamais montrée aux joueurs
+    if (this.corr && this.sol) { this.corr.fautes = this.lettresFausses(this.sol); this.corr.mots = Object.values(this.corr.justes).filter(Boolean).length }
     // Mots contestés : x:<mot> = { pid, word, by, ts, tenu } (la version d'avant et à qui elle était)
     // r:<mot>|<case> = { ch, pid } : la lettre d'avant, raturée
     this.contestes = Object.fromEntries([...(await st.list({ prefix: 'x:' }))].map(([k, v]) => [k.slice(2), v]))
@@ -64,6 +65,16 @@ export class Grid {
     for (const x of this.words) for (const [r, c] of x.cells) (this.byCell[r + ',' + c] ||= []).push(x)
   }
 
+  // une faute = une case dont la lettre n'est pas celle de la solution (case vide comprise)
+  lettresFausses(sol) {
+    let n = 0
+    for (let i = 0; i < sol.length; i++) {
+      if (sol[i] === '#') continue
+      const v = this.cells[Math.floor(i / this.meta.cols) + ',' + (i % this.meta.cols)]
+      if (!v || v.ch !== sol[i]) n++
+    }
+    return n
+  }
   scores() {
     const s = {}
     if (this.corr) { for (const p of Object.values(this.corr.justes)) if (p) s[p] = (s[p] || 0) + 1; return s }
@@ -93,7 +104,7 @@ export class Grid {
     const last = this.last || Math.max(0, ...Object.values(this.found).map(f => f.ts || 0)) || null
     const tout = nw > 0 && nf >= nw && !Object.keys(this.contestes).length
     const fin = this.corr ? (this.corr.fautes ? 'simple' : 'double') : this.abandon || tout ? 'simple' : null
-    const corr = this.corr ? { total: this.corr.total, fautes: this.corr.fautes, ts: this.corr.ts } : null
+    const corr = this.corr ? { total: this.corr.total, mots: this.corr.mots, fautes: this.corr.fautes, ts: this.corr.ts } : null
     return { corr, id: m.id, numero: m.numero, rows: m.rows, cols: m.cols, blacks: m.blacks, filled, pct: tot ? Math.floor(ink * 100 / tot) : 0, players: who.size, best, last, fin, abandon: this.abandon }
   }
   registry() { return this.env.REGISTRY.get(this.env.REGISTRY.idFromName('registry')) }
@@ -184,8 +195,8 @@ export class Grid {
         const sw = w.cells.map(([a, b]) => sol[a * m.cols + b]).join(''), x = this.contestes[w.id], f = this.found[w.id]
         justes[w.id] = x && x.word === sw ? x.pid : f && f.word === sw ? f.pid : null
       }
-      const total = this.words.length, fautes = Object.values(justes).filter(p => !p).length
-      this.sol = sol; this.corr = { ts: Date.now(), justes, total, fautes }
+      const total = this.words.length, mots = Object.values(justes).filter(Boolean).length, fautes = this.lettresFausses(sol)
+      this.sol = sol; this.corr = { ts: Date.now(), justes, total, mots, fautes }
       // les doutes et les contestations n'ont plus lieu d'être
       const put = { sol, corr: this.corr }, del = []
       for (const [k, v] of Object.entries(this.cells)) if (v.dq) { delete v.dq; put['c:' + k] = v }

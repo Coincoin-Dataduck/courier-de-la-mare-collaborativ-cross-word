@@ -79,7 +79,7 @@ function barreCorr() {
   let b = $('corr-bar')
   if (!corr || !sol) { if (b) b.remove(); return }
   if (!b) { b = document.createElement('div'); b.id = 'corr-bar'; b.className = 'corr-bar'; $('vp').parentElement.insertBefore(b, $('vp')) }
-  const n = corr.total - corr.fautes
+  const n = corr.mots
   b.innerHTML = '<div class="tog"><button data-v="0" class="' + (voirSol ? '' : 'on') + '">Notre grille</button><button data-v="1" class="' + (voirSol ? 'on' : '') + '">La solution</button></div>' +
     '<div class="note" title="Mots justes">' + n + '/' + corr.total + '<svg viewBox="0 0 100 20" preserveAspectRatio="none"><path d="M4 13 Q40 8 76 11 Q88 12 96 9"/></svg></div>'
   b.onclick = e => {
