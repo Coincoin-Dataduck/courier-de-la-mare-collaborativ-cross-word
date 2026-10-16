@@ -101,13 +101,25 @@ function fit() {
 }
 function setCs() { const g = $('g'); g.style.setProperty('--cs', cs + 'px'); g.style.setProperty('--lab', Math.max(18, Math.round(cs * 1.1)) + 'px') }
 
+// Cercle rouge à main levée autour d'une lettre « pas sûr » (toujours le même pour une case donnée)
+function cercle(r, c) {
+  let s = r * 31 + c * 7 + 3
+  const R = () => (s = (s * 9301 + 49297) % 233280) / 233280
+  const pts = [], n = 28, a0 = -1.9 + R() * .6, tour = 2 * Math.PI + .35 + R() * .3
+  const rx = 41 + R() * 4, ry = 37 + R() * 4, rot = (R() - .5) * 18
+  for (let i = 0; i <= n; i++) { const t = a0 + tour * i / n, w = 1 + (R() - .5) * .06 + (i / n) * .06; pts.push([50 + Math.cos(t) * rx * w, 52 + Math.sin(t) * ry * w]) }
+  const f = p => p.map(x => x.toFixed(1)).join(' ')
+  let d = 'M' + f(pts[0])
+  for (let i = 1; i < pts.length - 1; i++) d += ' Q' + f(pts[i]) + ' ' + f([(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2])
+  return '<svg class="dqc" viewBox="0 0 100 100"><path d="' + d + '" transform="rotate(' + rot.toFixed(1) + ' 50 50)"/></svg>'
+}
 function draw(r, c, anim) {
   const e = el[r][c], k = key(r, c), v = cells[k], p = PC[k]
   if (isBlack(meta, r, c)) return
   const nb = W.nums[k] ? '<b class="num">' + W.nums[k] + '</b>' : ''
   if (v) {
     const pl = players[v.pid] || { name: '?', color: '#24211d' }
-    e.innerHTML = nb + '<i' + (anim ? ' class="st"' : '') + ' title="' + esc(pl.name) + (v.dq ? ' (pas sûr)' : '') + '" style="color:' + pl.color + '">' + v.ch + '</i>' + (v.dq ? '<u class="dq" style="color:' + pl.color + '">?</u>' : '')
+    e.innerHTML = nb + '<i' + (anim ? ' class="st"' : '') + ' title="' + esc(pl.name) + (v.dq ? ' (pas sûr)' : '') + '" style="color:' + pl.color + '">' + v.ch + '</i>' + (v.dq ? cercle(r, c) + '<u class="dq" style="color:' + pl.color + '">?</u>' : '')
   } else if (p) e.innerHTML = nb + '<i class="pc' + (anim ? ' dr' : '') + '" style="color:' + ((players[PCby[k]] || {}).color || '#4f4c47') + '" title="Au crayon : ' + esc((players[PCby[k]] || {}).name || '?') + '">' + p + '</i>'
   else e.innerHTML = nb
   const ra = ratureDe(k)

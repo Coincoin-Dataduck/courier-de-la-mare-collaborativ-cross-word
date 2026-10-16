@@ -387,6 +387,8 @@ body.clav-on .ctoast{bottom:230px}
 .fil{max-height:9.6em;overflow-y:auto;overscroll-behavior:contain}
 
 /* lettres « pas sûr » */
+.g .c svg.dqc{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+.g .c svg.dqc path{fill:none;stroke:#b3261e;stroke-width:5;stroke-linecap:round;opacity:.85}
 .g .c u.dq{position:absolute;right:6%;bottom:2%;font:700 calc(var(--cs) * .34) Century,serif;text-decoration:none;line-height:1;pointer-events:none}
 .dlabel em.adq,.lst em.adq,li em.adq{font-style:italic;color:#8a5208}.dlabel em.adq{font-style:normal}
 .m-dq{border:1px dashed #24211d;background:transparent;color:#24211d;padding:5px 10px;font:700 11px Narrow,sans-serif;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;line-height:1.1;align-self:center}

@@ -278,7 +278,10 @@ export class Grid {
     if (m.t === 'cestbon') {
       const id = String(m.id || '')
       if (!this.contestes[id]) return
-      await this.resolve(id)
+      // On valide la ou les lettres changées : tous les mots contestés par ces mêmes cases sont réglés d'un coup
+      const cases = new Set(this.ratesDe(id).map(([rk]) => rk.slice(id.length + 1)))
+      const lies = Object.keys(this.contestes).filter(o => o === id || this.ratesDe(o).some(([rk]) => cases.has(rk.slice(o.length + 1))))
+      for (const o of lies) await this.resolve(o)
       this.sendConf()
       return
     }
