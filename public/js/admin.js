@@ -181,6 +181,29 @@ function hl(scroll) {
   const p = document.querySelector('.dl p[data-id="' + w.id + '"]')
   if (p) { p.classList.add('act'); if (scroll) { p.scrollIntoView({ block: 'nearest' }); p.querySelector('input').focus({ preventScroll: true }) } }
 }
+// Une liste collée se répartit : une ligne par champ, à partir de celui où l'on colle.
+// « VERTICALEMENT » / « HORIZONTALEMENT » font passer à l'autre liste ; un numéro en tête (« 12. ») range la ligne dans le mot qui porte ce numéro.
+function coller(e, i0) {
+  const txt = (e.clipboardData || window.clipboardData)?.getData('text') || ''
+  const lignes = txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  if (lignes.length < 2) return   // une seule ligne : collage normal
+  e.preventDefault()
+  const w0 = W.byId[i0.dataset.id]; let d = w0.d, k = W[d].indexOf(w0), n = 0, dernier = null
+  for (const l of lignes) {
+    const tete = l.replace(/[^A-Za-zÀ-ÿ]/g, '').toUpperCase()
+    if (/^HORIZONTALEMENT$/.test(tete)) { d = 'h'; k = 0; continue }
+    if (/^VERTICALEMENT$/.test(tete)) { d = 'v'; k = 0; continue }
+    const m = l.match(/^(\d{1,3})\s*[.)\-–:]\s*(.*)$/)
+    let t = m ? m[2].trim() : l
+    if (m) { const j = W[d].findIndex(w => w.n === +m[1]); if (j >= 0) k = j }
+    const w = W[d][k]; if (!w || !t) { k++; continue }
+    const inp = document.querySelector('.dl input[data-id="' + w.id + '"]')
+    if (inp) { inp.value = t; inp.dispatchEvent(new Event('input', { bubbles: true })); n++; dernier = inp }
+    k++
+  }
+  if (dernier) { dernier.focus(); dernier.scrollIntoView({ block: 'nearest' }) }
+  $('ed-etat').textContent = n + ' définition' + (n > 1 ? 's collées' : ' collée') + '. N’oublie pas d’enregistrer.'
+}
 for (const d of ['h', 'v']) {
   const box = $('d-' + d)
   box.addEventListener('input', e => {
@@ -190,6 +213,7 @@ for (const d of ['h', 'v']) {
     i.parentElement.classList.toggle('vide', !t); dirty = true; manque()
   })
   box.addEventListener('focusin', e => { const i = e.target.closest('input'); if (i) { act = i.dataset.id; hl() } })
+  box.addEventListener('paste', e => { const i = e.target.closest('input'); if (i) coller(e, i) })
   box.addEventListener('keydown', e => {
     if (e.key !== 'Enter') return
     e.preventDefault()
