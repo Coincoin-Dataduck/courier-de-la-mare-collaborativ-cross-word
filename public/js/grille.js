@@ -11,6 +11,8 @@ let cells = {}, players = {}, scores = {}, feed = [], online = new Set(), others
 let PC = {}, PCby = {}          // crayon de bois : partagé, ne compte pas
 try { localStorage.removeItem('cdlm:pc:' + gid) } catch {}
 let me = load('cdlm:me')
+const alias = load('cdlm:pid:' + gid)   // « c'est moi » dit sur cette grille
+if (me && alias && alias.pid) me = { ...me, ...alias }
 let abandon = null, foundSet = new Set(), contestes = {}, ratures = {}
 // Grille corrigée : corr = { justes, total, fautes }, sol = la solution ; voirSol = interrupteur « La solution »
 let corr = null, sol = null, voirSol = false
@@ -32,7 +34,9 @@ async function start() {
   } catch { $('etat').textContent = 'Pas de réseau…'; setTimeout(start, 3000); return }
   apply(st)
   build()
-  if (!me || !me.pid || !me.name) accueil(); else connect()
+  if (!me || !me.pid || !me.name) accueil()
+  else if (!players[me.pid] && Object.values(players).some(x => simp(x.name) === simp(me.name))) { accueil(); $('go').click() }
+  else connect()
 }
 function perdu() { $('journal').classList.add('hide'); $('accueil').classList.add('hide'); $('perdu').classList.remove('hide'); document.title = 'Grille introuvable — Le Courrier de la Mare' }
 
@@ -417,11 +421,11 @@ function accueil() {
       const [pid, x] = same
       $('doublon-q').innerHTML = 'Il y a déjà un·e <b style="color:' + x.color + '">' + esc(x.name) + '</b> sur cette grille. C’est toi ?'
       $('d-btns').classList.remove('hide'); dbl.classList.remove('hide'); go.disabled = true
-      $('d-oui').onclick = () => { me = { pid, name: x.name, color: x.color }; save('cdlm:me', me); location.reload() }
+      $('d-oui').onclick = () => { const b = load('cdlm:me') || {}; save('cdlm:me', { pid: b.pid || rid(), name: b.name || x.name, color: b.color || x.color }); save('cdlm:pid:' + gid, { pid, name: x.name, color: x.color }); location.reload() }
       $('d-non').onclick = () => { $('doublon-q').textContent = 'Choisis un autre nom, alors.'; $('d-btns').classList.add('hide'); nom.select(); nom.focus() }
       return
     }
-    me = { pid: (me && me.pid) || rid(), name, color }; save('cdlm:me', me)
+    me = { pid: (me && me.pid) || rid(), name, color }; const a = load('cdlm:pid:' + gid); if (a && a.pid === me.pid) save('cdlm:pid:' + gid, me); else save('cdlm:me', me)
     v.classList.add('hide')
     if (ws && ws.readyState === 1) send({ t: 'hello', ...me }); else connect()
     ranking(); kbFocus()
