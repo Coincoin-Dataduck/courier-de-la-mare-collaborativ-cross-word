@@ -432,3 +432,27 @@ body.enjeu .m-dq small{display:none}
 #vue-dsc .der .ko{color:#b3261e;font-weight:700}
 #vue-dsc .jr{font:15px Times,serif;display:flex;gap:6px;align-items:center}
 #vue-dsc .ds-ap{background:#f3efe5;border:1px solid var(--ink);padding:12px 14px;font:14px/1.45 Mono,monospace;white-space:pre-wrap;margin-top:8px}
+
+/* ---------- lire une capture (admin) ---------- */
+.cap-ouvrir{display:flex;justify-content:flex-end;margin-top:10px}
+#cap{border:1px solid var(--ink);background:#f3efe5;padding:16px;margin:10px 0 4px}
+.cap-drop{border:2px dashed var(--grey);padding:28px 18px;text-align:center;font:400 16px/1.4 Times,serif;color:var(--grey);cursor:pointer}
+.cap-drop b{display:block;font:700 21px Century,serif;color:var(--ink);margin-bottom:6px}
+.cap-drop.sur{border-color:var(--green);background:#ebe6da}
+.cap-lit{display:flex;gap:12px;align-items:center;font:italic 17px Times,serif;color:var(--grey);padding:22px 0}
+.cap-pt{width:10px;height:10px;border-radius:50%;background:var(--green);animation:cap-p 1s infinite alternate}@keyframes cap-p{to{opacity:.2}}
+.cap-cols{display:grid;grid-template-columns:auto 1fr;gap:24px;align-items:start}
+.cap-mg{display:grid;border-top:2px solid var(--ink);border-left:2px solid var(--ink);width:max-content}
+.cap-mg i{width:var(--cs);height:var(--cs);border-right:1px solid #2b2823;border-bottom:1px solid #2b2823;background:#f1ece1;box-sizing:border-box}
+.cap-mg i.n{background:var(--ink)}.cap-mg i.dt{outline:2px solid var(--green);outline-offset:-3px}
+.cap-r h4{font:700 19px Century,serif;margin:0 0 4px}
+.cap-r .cap-s{font:400 15px/1.35 Times,serif;color:var(--grey);margin:0 0 10px}
+.cap-ck{display:flex;gap:8px;align-items:center;font:400 16px Times,serif;margin:6px 0}
+.cap-ck input{accent-color:var(--green);width:16px;height:16px}
+.cap-two{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:10px}
+.cap-two h5{font:700 12px Narrow,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--green);border-bottom:1px solid var(--ink);padding-bottom:4px;margin:0 0 6px}
+.cap-two p{font:400 15px/1.3 Times,serif;margin:3px 0}.cap-two p b{font:700 13px Narrow,sans-serif;margin-right:4px}
+.cap-acts{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:14px;border-top:1px solid var(--ink);padding-top:12px}
+.cap-acts .cap-s{margin:0 0 0 auto;font:italic 15px Times,serif;color:var(--grey)}
+#cap .cap-vert{background:var(--green);border-color:var(--green);color:#f1ede2}
+@media (max-width:700px){.cap-cols,.cap-two{grid-template-columns:1fr}}

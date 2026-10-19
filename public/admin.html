@@ -75,6 +75,12 @@
   <div id="vue-ed" class="hide">
     <div class="outils" style="margin-top:16px"><button class="pbtn" id="retour">← Les grilles</button><h2 style="margin:0 0 0 8px" id="ed-titre">Nouvelle grille</h2></div>
 
+    <div class="cap-ouvrir"><button class="pbtn" id="cap-ouvrir">Lire une capture…</button></div>
+    <div id="cap" class="hide">
+      <div id="cap-drop" class="cap-drop" tabindex="0"><b>Dépose la capture du journal ici</b>ou colle-la (Ctrl+V), ou touche pour choisir une image. Grille, définitions, ou les deux sur la même image.<input type="file" id="cap-file" accept="image/*" hidden></div>
+      <div id="cap-lit" class="cap-lit hide"><span class="cap-pt"></span>Le correcteur lit la capture… (une dizaine de secondes)</div>
+      <div id="cap-res" class="hide"></div>
+    </div>
     <p class="k">1. La taille</p>
     <div class="form">
       <label>Lignes<input type="number" id="f-rows" min="3" max="40" value="32"></label>

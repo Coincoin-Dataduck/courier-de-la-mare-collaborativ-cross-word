@@ -1,5 +1,6 @@
 // Le Courrier de la Mare — la salle de rédaction (admin)
 import { words, mirror } from './shared.js'
+import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger } from './capture.js'
 
 const $ = id => document.getElementById(id)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -362,3 +363,86 @@ $('ed-save').onclick = async () => {
 }
 
 liste()
+
+// ---------- lire une capture ----------
+const LAPI = API.replace(/\/grids$/, '/lire')
+let lu = null
+function capReset() { lu = null; $('cap-drop').classList.remove('hide'); $('cap-lit').classList.add('hide'); $('cap-res').classList.add('hide') }
+$('cap-ouvrir').onclick = () => { $('cap').classList.toggle('hide'); capReset() }
+$('cap-drop').onclick = () => $('cap-file').click()
+$('cap-drop').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('cap-file').click() } }
+$('cap-file').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) capLire(f) }
+$('cap-drop').ondragover = e => { e.preventDefault(); $('cap-drop').classList.add('sur') }
+$('cap-drop').ondragleave = () => $('cap-drop').classList.remove('sur')
+$('cap-drop').ondrop = e => { e.preventDefault(); $('cap-drop').classList.remove('sur'); const f = [...e.dataTransfer.files].find(f => f.type.startsWith('image/')); if (f) capLire(f) }
+document.addEventListener('paste', e => {
+  if ($('cap').classList.contains('hide') || $('vue-ed').classList.contains('hide')) return
+  const it = [...((e.clipboardData && e.clipboardData.items) || [])].find(i => i.type.startsWith('image/'))
+  if (!it) return
+  e.preventDefault(); capLire(it.getAsFile())
+})
+async function capLire(f) {
+  $('cap-drop').classList.add('hide'); $('cap-lit').classList.remove('hide'); $('cap-res').classList.add('hide')
+  let im
+  try { im = await chargerImage(f) } catch (e) { capReset(); alert(e.message); return }
+  const g = lireGrille(versCanvas(im, 2400))
+  let lus = null, err = ''
+  try {
+    const r = await fetch(LAPI, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image: pourEnvoi(im) }) })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(d.error || 'erreur ' + r.status)
+    lus = d
+  } catch (e) { err = e.message }
+  lu = { g, defs: lus }
+  capMontrer(err)
+}
+function capMini(g) {
+  const cs = Math.max(8, Math.min(18, Math.floor(300 / Math.max(g.R, g.C)))), dt = new Set(g.douteuses.map(([r, c]) => r + ',' + c))
+  let h = ''
+  for (let r = 0; r < g.R; r++) for (let c = 0; c < g.C; c++) h += '<i class="' + (g.B[r * g.C + c] === '1' ? 'n' : '') + (dt.has(r + ',' + c) ? ' dt' : '') + '"></i>'
+  return '<div class="cap-mg" style="--cs:' + cs + 'px;grid-template-columns:repeat(' + g.C + ',var(--cs))">' + h + '</div>'
+}
+function capCol(t, L) {
+  return '<div><h5>' + t + ' · ' + L.length + '</h5>' + L.slice(0, 6).map(x => '<p><b>' + x.n + '.</b>' + esc(x.t) + '</p>').join('') + (L.length > 6 ? '<p style="color:var(--grey)">… ' + (L.length - 6) + ' autres</p>' : '') + '</div>'
+}
+function capMontrer(err) {
+  const g = lu.g, dh = (lu.defs && lu.defs.h) || [], dv = (lu.defs && lu.defs.v) || [], nd = dh.length + dv.length
+  const titre = [], notes = []
+  if (g) titre.push(g.R + ' × ' + g.C, g.nb + ' case' + (g.nb > 1 ? 's noires' : ' noire'))
+  if (nd) titre.push(nd + ' définition' + (nd > 1 ? 's' : ''))
+  if (!g) notes.push('Pas de grille repérée sur l’image.')
+  else {
+    if (g.R !== R || g.C !== C) notes.push('La grille de l’éditeur passera en ' + g.R + ' × ' + g.C + '.')
+    if (g.douteuses.length) notes.push('Les cases entourées en vert sont peu nettes sur l’image : jette un œil.')
+  }
+  if (err) notes.push('Définitions non lues : ' + err + '.')
+  else if (!nd) notes.push('Pas de définitions trouvées.')
+  let h = '<div class="cap-cols">' + (g ? '<div>' + capMini(g) + '</div>' : '') + '<div class="cap-r"><h4>' + esc(titre.join(' · ') || 'Rien trouvé sur l’image') + '</h4>'
+  h += '<p class="cap-s">' + esc(notes.join(' ')) + '</p>'
+  h += '<label class="cap-ck"><input type="checkbox" id="cap-n"' + (g ? ' checked' : ' disabled') + '> Placer les cases noires</label>'
+  h += '<label class="cap-ck"><input type="checkbox" id="cap-d"' + (nd ? ' checked' : ' disabled') + '> Remplir les définitions (rangées par numéro)</label>'
+  if (nd) h += '<div class="cap-two">' + capCol('Horizontalement', dh) + capCol('Verticalement', dv) + '</div>'
+  h += '<div class="cap-acts"><button class="pbtn cap-vert" id="cap-ok"' + (g || nd ? '' : ' disabled') + '>Mettre dans la grille</button><button class="pbtn" id="cap-non">Annuler</button><button class="pbtn" id="cap-autre">Une autre image</button><span class="cap-s">Tu pourras tout retoucher avant d’enregistrer.</span></div></div></div>'
+  $('cap-lit').classList.add('hide'); $('cap-res').innerHTML = h; $('cap-res').classList.remove('hide')
+}
+$('cap-res').onclick = e => {
+  const id = e.target.id
+  if (id === 'cap-non') { $('cap').classList.add('hide'); capReset() }
+  else if (id === 'cap-autre') capReset()
+  else if (id === 'cap-ok') capMettre()
+}
+function capMettre() {
+  const n = $('cap-n').checked && lu.g, d = $('cap-d').checked && lu.defs
+  if (!n && !d) return
+  if (n && B.includes('1') && !confirm('Remplacer les cases noires déjà posées ?')) return
+  if (d && Object.keys(clues).length && !confirm('Remplacer les définitions déjà écrites ?')) return
+  const msg = []
+  if (n) { R = lu.g.R; C = lu.g.C; B = lu.g.B; $('f-rows').value = R; $('f-cols').value = C; grille(); msg.push(lu.g.nb + ' cases noires placées') }
+  if (d) {
+    const r = ranger(W, lu.defs); clues = r.clues; defs()
+    msg.push(r.n + ' définition' + (r.n > 1 ? 's rangées' : ' rangée'))
+    if (r.perdues.length) msg.push(r.perdues.length + ' à vérifier, sans mot à ce numéro (' + r.perdues.slice(0, 6).join(', ') + (r.perdues.length > 6 ? '…' : '') + ')')
+  }
+  dirty = true; setMode('def'); $('cap').classList.add('hide'); capReset()
+  $('ed-etat').textContent = msg.join(' · ') + '. N’oublie pas d’enregistrer.'
+}

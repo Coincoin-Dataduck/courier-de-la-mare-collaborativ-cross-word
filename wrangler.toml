@@ -15,6 +15,10 @@ html_handling = "none"
 [triggers]
 crons = ["0 * * * *"]
 
+# Lecture des captures (définitions) : IA de Cloudflare, rien d'autre à configurer
+[ai]
+binding = "AI"
+
 [[durable_objects.bindings]]
 name = "GRID"
 class_name = "Grid"

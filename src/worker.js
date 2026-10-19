@@ -2,6 +2,7 @@
 import { Grid } from './grid.js'
 import { Registry } from './registry.js'
 import { matin, annonce, poster } from './matin.js'
+import { lireDefs } from './lire.js'
 export { Grid, Registry }
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
@@ -36,6 +37,15 @@ export default {
   async scheduled(ev, env, ctx) { ctx.waitUntil(matin(env, sources(env), { now: ev.scheduledTime })) },
   async fetch(req, env) {
     const url = new URL(req.url), p = url.pathname.split('/').filter(Boolean)
+    // Lire les définitions d'une capture : POST /api/admin/<secret>/lire { image: data URL }
+    if (p[0] === 'api' && p[1] === 'admin' && p[3] === 'lire' && p.length === 4) {
+      if (!isAdmin(env, p[2])) return json({ error: 'introuvable' }, 404)
+      if (req.method !== 'POST') return json({ error: 'introuvable' }, 404)
+      if (!env.AI) return json({ error: 'la lecture n’est pas branchée (bloc [ai] du wrangler.toml)' }, 503)
+      const b = await req.json().catch(() => ({}))
+      if (!/^data:image\/(jpeg|png|webp);base64,/.test(b.image || '') || b.image.length > 4e6) return json({ error: 'image refusée' }, 400)
+      try { return json(await lireDefs(env, b.image)) } catch (e) { return json({ error: e.message }, 502) }
+    }
     // Réglages du message du matin : /api/admin/<secret>/discord[/apercu|/envoyer]
     if (p[0] === 'api' && p[1] === 'admin' && p[3] === 'discord') {
       if (!isAdmin(env, p[2])) return json({ error: 'introuvable' }, 404)
