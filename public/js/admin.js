@@ -1,6 +1,6 @@
 // Le Courrier de la Mare — la salle de rédaction (admin)
 import { words, mirror } from './shared.js'
-import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger } from './capture.js'
+import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, recadrer, caler } from './capture.js'
 
 const $ = id => document.getElementById(id)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -118,6 +118,8 @@ function setMode(m) {
   $('ed-g').classList.toggle('def', m === 'def'); $('ed-g').classList.toggle('sol', m === 'sol')
   $('ed-corr').classList.toggle('hide', m !== 'sol'); $('ed-decorr').classList.toggle('hide', m !== 'sol' || !corrInfo)
   $('ed-save').classList.toggle('hide', m === 'sol')
+  $('cap-ouvrir').textContent = m === 'sol' ? 'Lire la solution sur une capture…' : 'Lire une capture…'
+  if (m !== capMode) { $('cap').classList.add('hide'); capMode = m }
   if (m === 'sol') { infoSol(); hl(); return }
   solCur = null
   $('ed-aide').textContent = m === 'noir'
@@ -281,12 +283,12 @@ function setS(r, c, ch) {
   el[r][c].querySelector('i.sl').textContent = ch.trim(); infoSol()
   garder()
 }
-let tGarde = null
+let tGarde = null, gardeMsg = ''
 function garder() {
   clearTimeout(tGarde)
   $('ed-etat').textContent = 'Brouillon…'
   tGarde = setTimeout(async () => {
-    try { await api('/' + cur.id + '/brouillon', { method: 'PUT', body: JSON.stringify({ sol: S }) }); $('ed-etat').textContent = 'Brouillon gardé. Clique sur « Corriger la grille » quand tout est tapé.' }
+    try { await api('/' + cur.id + '/brouillon', { method: 'PUT', body: JSON.stringify({ sol: S }) }); $('ed-etat').textContent = gardeMsg || 'Brouillon gardé. Clique sur « Corriger la grille » quand tout est tapé.'; gardeMsg = '' }
     catch (e) { $('ed-etat').textContent = 'Brouillon pas gardé : ' + e.message }
   }, 700)
 }
@@ -366,7 +368,7 @@ liste()
 
 // ---------- lire une capture ----------
 const LAPI = API.replace(/\/grids$/, '/lire')
-let lu = null
+let lu = null, capMode = null
 function capReset() { lu = null; $('cap-drop').classList.remove('hide'); $('cap-lit').classList.add('hide'); $('cap-res').classList.add('hide') }
 $('cap-ouvrir').onclick = () => { $('cap').classList.toggle('hide'); capReset() }
 $('cap-drop').onclick = () => $('cap-file').click()
@@ -385,6 +387,7 @@ async function capLire(f) {
   $('cap-drop').classList.add('hide'); $('cap-lit').classList.remove('hide'); $('cap-res').classList.add('hide')
   let im
   try { im = await chargerImage(f) } catch (e) { capReset(); alert(e.message); return }
+  if (mode === 'sol') return capLireSol(im)
   const g = lireGrille(versCanvas(im, 2400))
   let lus = null, err = ''
   try {
@@ -430,6 +433,7 @@ $('cap-res').onclick = e => {
   if (id === 'cap-non') { $('cap').classList.add('hide'); capReset() }
   else if (id === 'cap-autre') capReset()
   else if (id === 'cap-ok') capMettre()
+  else if (id === 'cap-sol') capMettreSol()
 }
 function capMettre() {
   const n = $('cap-n').checked && lu.g, d = $('cap-d').checked && lu.defs
@@ -445,4 +449,49 @@ function capMettre() {
   }
   dirty = true; setMode('def'); $('cap').classList.add('hide'); capReset()
   $('ed-etat').textContent = msg.join(' · ') + '. N’oublie pas d’enregistrer.'
+}
+
+// ---------- lire la solution sur une capture (mode Solution) ----------
+function capErreur(t) {
+  $('cap-lit').classList.add('hide')
+  $('cap-res').innerHTML = '<div class="cap-r"><h4>Rien à importer</h4><p class="cap-s">' + esc(t) + '</p><div class="cap-acts"><button class="pbtn" id="cap-autre">Une autre image</button><button class="pbtn" id="cap-non">Annuler</button></div></div>'
+  $('cap-res').classList.remove('hide')
+}
+async function capLireSol(im) {
+  const cv = versCanvas(im, 2400), g = lireGrille(cv)
+  if (!g) return capErreur('Pas de grille repérée sur l’image.')
+  const k = caler(g, R, C, B)
+  if (!k || k.score < 0.9) return capErreur('Les cases noires de la capture (' + g.R + ' × ' + g.C + ') ne correspondent pas à cette grille (' + R + ' × ' + C + '). Vérifie que c’est bien la solution de la grille n° ' + (cur ? cur.numero : '') + '.')
+  let d
+  try {
+    const r = await fetch(LAPI, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'solution', image: recadrer(cv, g.box), R: g.R, C: g.C, B: g.B }) })
+    d = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(d.error || 'erreur ' + r.status)
+  } catch (e) { return capErreur('Lettres non lues : ' + e.message + '.') }
+  lu = { sol: d.sol, g, k }
+  const blancs = g.B.split('').filter(x => x === '0').length, lues = d.sol.split('').filter(x => /[A-Z]/.test(x)).length
+  const notes = []
+  if (g.R < R) notes.push('La capture ne montre que ' + g.R + ' lignes sur ' + R + ' : ' + (R - g.R > 1 ? 'les autres restent' : 'la dernière reste') + ' à taper.')
+  if (g.C < C) notes.push('La capture ne montre que ' + g.C + ' colonnes sur ' + C + '.')
+  if (k.score < 1) notes.push('Quelques cases noires diffèrent de ta grille : vérifie.')
+  if (lues < blancs) notes.push((blancs - lues) + ' lettre' + (blancs - lues > 1 ? 's illisibles restent' : ' illisible reste') + ' vide' + (blancs - lues > 1 ? 's' : '') + '.')
+  if (S.split('').some(x => /[A-Z]/.test(x))) notes.push('Les lettres déjà tapées seront remplacées par celles lues.')
+  const cs = Math.max(10, Math.min(20, Math.floor(320 / Math.max(g.R, g.C))))
+  let mg = ''
+  for (let i = 0; i < g.R * g.C; i++) mg += g.B[i] === '1' ? '<i class="n"></i>' : '<i class="vu">' + d.sol[i].trim() + '</i>'
+  $('cap-res').innerHTML = '<div class="cap-cols"><div><div class="cap-mg" style="--cs:' + cs + 'px;grid-template-columns:repeat(' + g.C + ',var(--cs))">' + mg + '</div></div><div class="cap-r"><h4>Solution lue · ' + lues + ' lettres sur ' + blancs + '</h4><p class="cap-s">' + esc(notes.join(' ')) + '</p>' +
+    '<div class="cap-acts"><button class="pbtn cap-vert" id="cap-sol">Mettre dans la solution</button><button class="pbtn" id="cap-non">Annuler</button><button class="pbtn" id="cap-autre">Une autre image</button><span class="cap-s">Rien n’est corrigé avant « Corriger la grille ».</span></div></div></div>'
+  $('cap-lit').classList.add('hide'); $('cap-res').classList.remove('hide')
+}
+function capMettreSol() {
+  const { sol, g, k } = lu; let n = 0
+  const a = S.split('')
+  for (let r = 0; r < g.R; r++) for (let c = 0; c < g.C; c++) {
+    const ch = sol[r * g.C + c], i = (r + k.dr) * C + c + k.dc
+    if (B[i] !== '1' && /[A-Z]/.test(ch)) { a[i] = ch; n++ }
+  }
+  S = a.join('')
+  $('cap').classList.add('hide'); capReset()
+  gardeMsg = n + ' lettres mises dans la solution (brouillon gardé). Relis, complète, puis « Corriger la grille ».'
+  grille(); setMode('sol'); garder()
 }

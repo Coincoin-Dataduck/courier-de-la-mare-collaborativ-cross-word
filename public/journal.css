@@ -456,3 +456,5 @@ body.enjeu .m-dq small{display:none}
 .cap-acts .cap-s{margin:0 0 0 auto;font:italic 15px Times,serif;color:var(--grey)}
 #cap .cap-vert{background:var(--green);border-color:var(--green);color:#f1ede2}
 @media (max-width:700px){.cap-cols,.cap-two{grid-template-columns:1fr}}
+.cap-mg i{display:flex;align-items:center;justify-content:center;font:700 calc(var(--cs)*.62)/1 Narrow,sans-serif;color:var(--ink)}
+.cap-mg i.vu{background:#fff}

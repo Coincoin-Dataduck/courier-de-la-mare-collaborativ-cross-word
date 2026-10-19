@@ -71,7 +71,7 @@ export function lireGrille(cv) {
     B += est ? '1' : '0'; if (est) nb++
     if (f > 0.45 && f < 0.88) douteuses.push([r, c])
   }
-  return { R, C, B, douteuses, nb }
+  return { R, C, B, douteuses, nb, box: { x0: xs[0], x1: xs[C], y0: ys[0], y1: ys[R] } }
 }
 
 // Range les définitions lues ({ h:[{n,t}], v:[{n,t}] }) dans les mots de la grille, par numéro.
@@ -83,4 +83,28 @@ export function ranger(W, lu) {
     if (w && x.t) { clues[w.id] = x.t; n++ } else perdues.push(d.toUpperCase() + ' ' + x.n)
   }
   return { clues, n, perdues }
+}
+
+// Image de la grille seule (agrandie) pour la lecture des lettres de la solution
+export function recadrer(cv, box) {
+  const m = 4, x0 = Math.max(0, Math.floor(box.x0 - m)), y0 = Math.max(0, Math.floor(box.y0 - m))
+  const w = Math.min(cv.width, Math.ceil(box.x1 + m)) - x0, h = Math.min(cv.height, Math.ceil(box.y1 + m)) - y0
+  const k = Math.min(1600 / Math.max(w, h), Math.max(1, 1000 / w))
+  const o = document.createElement('canvas'); o.width = Math.round(w * k); o.height = Math.round(h * k)
+  const x = o.getContext('2d'); x.imageSmoothingQuality = 'high'; x.drawImage(cv, x0, y0, w, h, 0, 0, o.width, o.height)
+  return o.toDataURL('image/jpeg', 0.92)
+}
+
+// Où se place la grille de la capture dans celle de l'éditeur (capture coupée = moins de lignes)
+// Renvoie { dr, dc, score } (score = part des cases noires/blanches identiques) ou null
+export function caler(g, R, C, B) {
+  if (g.R > R || g.C > C) return null
+  let best = null
+  for (let dr = 0; dr <= R - g.R; dr++) for (let dc = 0; dc <= C - g.C; dc++) {
+    let ok = 0
+    for (let r = 0; r < g.R; r++) for (let c = 0; c < g.C; c++) if (g.B[r * g.C + c] === B[(r + dr) * C + c + dc]) ok++
+    const score = ok / (g.R * g.C)
+    if (!best || score > best.score) best = { dr, dc, score }
+  }
+  return best
 }
