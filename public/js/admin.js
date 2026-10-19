@@ -1,6 +1,6 @@
 // Le Courrier de la Mare — la salle de rédaction (admin)
 import { words, mirror } from './shared.js'
-import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, recadrer, caler } from './capture.js'
+import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche } from './capture.js'
 
 const $ = id => document.getElementById(id)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -462,23 +462,41 @@ async function capLireSol(im) {
   if (!g) return capErreur('Pas de grille repérée sur l’image.')
   const k = caler(g, R, C, B)
   if (!k || k.score < 0.9) return capErreur('Les cases noires de la capture (' + g.R + ' × ' + g.C + ') ne correspondent pas à cette grille (' + R + ' × ' + C + '). Vérifie que c’est bien la solution de la grille n° ' + (cur ? cur.numero : '') + '.')
-  let d
+  // l'IA ne voit que des mots isolés, horizontaux puis verticaux, par planches de 18
+  const lots = []
+  for (const d of ['h', 'v']) { const L = motsDe(g, d); for (let i = 0; i < L.length; i += 18) lots.push(L.slice(i, i + 18)) }
+  let rep
   try {
-    const r = await fetch(LAPI, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'solution', image: recadrer(cv, g.box), R: g.R, C: g.C, B: g.B }) })
-    d = await r.json().catch(() => ({}))
-    if (!r.ok) throw new Error(d.error || 'erreur ' + r.status)
+    rep = await Promise.all(lots.map(async mots => {
+      const r = await fetch(LAPI, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mode: 'mots', image: planche(cv, g, mots), longueurs: mots.map(m => m.length) }) })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(d.error || 'erreur ' + r.status)
+      return d.mots
+    }))
   } catch (e) { return capErreur('Lettres non lues : ' + e.message + '.') }
-  lu = { sol: d.sol, g, k }
-  const blancs = g.B.split('').filter(x => x === '0').length, lues = d.sol.split('').filter(x => /[A-Z]/.test(x)).length
+  // chaque case reçoit les lettres lues dans les deux sens ; on garde si d'accord (ou un seul sens lu)
+  const vu = {}
+  lots.forEach((mots, j) => mots.forEach((m, i) => { const w = rep[j][i]; if (w) m.forEach(([r, c], n) => { if (w[n] !== '?') (vu[r + ',' + c] ||= []).push(w[n]) }) }))
+  let sol = '', desac = 0
+  const doute = new Set()
+  for (let r = 0; r < g.R; r++) for (let c = 0; c < g.C; c++) {
+    if (g.B[r * g.C + c] === '1') { sol += '#'; continue }
+    const v = vu[r + ',' + c] || []
+    if (v.length && v.every(x => x === v[0])) sol += v[0]
+    else { sol += ' '; if (v.length) { desac++; doute.add(r * g.C + c) } }
+  }
+  lu = { sol, g, k }
+  const blancs = g.B.split('').filter(x => x === '0').length, lues = sol.split('').filter(x => /[A-Z]/.test(x)).length
   const notes = []
   if (g.R < R) notes.push('La capture ne montre que ' + g.R + ' lignes sur ' + R + ' : ' + (R - g.R > 1 ? 'les autres restent' : 'la dernière reste') + ' à taper.')
   if (g.C < C) notes.push('La capture ne montre que ' + g.C + ' colonnes sur ' + C + '.')
   if (k.score < 1) notes.push('Quelques cases noires diffèrent de ta grille : vérifie.')
-  if (lues < blancs) notes.push((blancs - lues) + ' lettre' + (blancs - lues > 1 ? 's illisibles restent' : ' illisible reste') + ' vide' + (blancs - lues > 1 ? 's' : '') + '.')
+  if (desac) notes.push(desac + ' case' + (desac > 1 ? 's' : '') + ' entourée' + (desac > 1 ? 's' : '') + ' en vert : l’horizontal et le vertical ne disent pas pareil, laissée' + (desac > 1 ? 's' : '') + ' vide' + (desac > 1 ? 's' : '') + '.')
+  if (lues + desac < blancs) notes.push((blancs - lues - desac) + ' autre' + (blancs - lues - desac > 1 ? 's cases illisibles' : ' case illisible') + '.')
   if (S.split('').some(x => /[A-Z]/.test(x))) notes.push('Les lettres déjà tapées seront remplacées par celles lues.')
   const cs = Math.max(10, Math.min(20, Math.floor(320 / Math.max(g.R, g.C))))
   let mg = ''
-  for (let i = 0; i < g.R * g.C; i++) mg += g.B[i] === '1' ? '<i class="n"></i>' : '<i class="vu">' + d.sol[i].trim() + '</i>'
+  for (let i = 0; i < g.R * g.C; i++) mg += g.B[i] === '1' ? '<i class="n"></i>' : '<i class="vu' + (doute.has(i) ? ' dt' : '') + '">' + sol[i].trim() + '</i>'
   $('cap-res').innerHTML = '<div class="cap-cols"><div><div class="cap-mg" style="--cs:' + cs + 'px;grid-template-columns:repeat(' + g.C + ',var(--cs))">' + mg + '</div></div><div class="cap-r"><h4>Solution lue · ' + lues + ' lettres sur ' + blancs + '</h4><p class="cap-s">' + esc(notes.join(' ')) + '</p>' +
     '<div class="cap-acts"><button class="pbtn cap-vert" id="cap-sol">Mettre dans la solution</button><button class="pbtn" id="cap-non">Annuler</button><button class="pbtn" id="cap-autre">Une autre image</button><span class="cap-s">Rien n’est corrigé avant « Corriger la grille ».</span></div></div></div>'
   $('cap-lit').classList.add('hide'); $('cap-res').classList.remove('hide')

@@ -71,7 +71,7 @@ export function lireGrille(cv) {
     B += est ? '1' : '0'; if (est) nb++
     if (f > 0.45 && f < 0.88) douteuses.push([r, c])
   }
-  return { R, C, B, douteuses, nb, box: { x0: xs[0], x1: xs[C], y0: ys[0], y1: ys[R] } }
+  return { R, C, B, douteuses, nb, xs, ys, box: { x0: xs[0], x1: xs[C], y0: ys[0], y1: ys[R] } }
 }
 
 // Range les définitions lues ({ h:[{n,t}], v:[{n,t}] }) dans les mots de la grille, par numéro.
@@ -107,4 +107,35 @@ export function caler(g, R, C, B) {
     if (!best || score > best.score) best = { dr, dc, score }
   }
   return best
+}
+
+// Les mots de la grille lue (2 lettres et plus), dans un sens : listes de cases [r, c]
+export function motsDe(g, d) {
+  const L = [], A = d === 'h' ? g.R : g.C, N = d === 'h' ? g.C : g.R
+  for (let a = 0; a < A; a++) {
+    let run = []
+    for (let b = 0; b <= N; b++) {
+      const r = d === 'h' ? a : b, c = d === 'h' ? b : a
+      if (b < N && g.B[r * g.C + c] === '0') run.push([r, c])
+      else { if (run.length >= 2) L.push(run); run = [] }
+    }
+  }
+  return L
+}
+
+// Planche : chaque mot sur une ligne numérotée, cases recopiées côte à côte, sans traits ni cases noires
+export function planche(cv, g, mots) {
+  const T = 56, G = 5, LAB = 90, larg = Math.max(...mots.map(m => m.length))
+  const o = document.createElement('canvas'); o.width = LAB + larg * (T + G) + 20; o.height = mots.length * (T + 22) + 22
+  const x = o.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, o.width, o.height); x.imageSmoothingQuality = 'high'
+  x.font = 'bold 30px Arial, sans-serif'; x.textBaseline = 'middle'
+  mots.forEach((m, i) => {
+    const y = 22 + i * (T + 22)
+    x.fillStyle = '#777'; x.fillText((i + 1) + ' :', 10, y + T / 2)
+    m.forEach(([r, c], k) => {
+      const x0 = g.xs[c], x1 = g.xs[c + 1], y0 = g.ys[r], y1 = g.ys[r + 1], mx = (x1 - x0) * 0.17, my = (y1 - y0) * 0.17
+      x.drawImage(cv, x0 + mx, y0 + my, x1 - x0 - 2 * mx, y1 - y0 - 2 * my, LAB + k * (T + G), y, T, T)
+    })
+  })
+  return o.toDataURL('image/jpeg', 0.92)
 }

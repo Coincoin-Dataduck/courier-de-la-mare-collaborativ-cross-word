@@ -2,7 +2,7 @@
 import { Grid } from './grid.js'
 import { Registry } from './registry.js'
 import { matin, annonce, poster } from './matin.js'
-import { lireDefs, lireSolution } from './lire.js'
+import { lireDefs, lireMots } from './lire.js'
 export { Grid, Registry }
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
@@ -44,10 +44,10 @@ export default {
       if (!env.AI) return json({ error: 'la lecture n’est pas branchée (bloc [ai] du wrangler.toml)' }, 503)
       const b = await req.json().catch(() => ({}))
       if (!/^data:image\/(jpeg|png|webp);base64,/.test(b.image || '') || b.image.length > 4e6) return json({ error: 'image refusée' }, 400)
-      if (b.mode === 'solution') {
-        const R = +b.R, C = +b.C
-        if (!(R >= 3 && R <= 40 && C >= 3 && C <= 40) || !/^[01]+$/.test(b.B || '') || b.B.length !== R * C) return json({ error: 'grille refusée' }, 400)
-        try { return json(await lireSolution(env, b.image, R, C, b.B)) } catch (e) { return json({ error: e.message }, 502) }
+      if (b.mode === 'mots') {
+        const L = Array.isArray(b.longueurs) ? b.longueurs.map(Number) : []
+        if (!L.length || L.length > 40 || L.some(l => !(l >= 2 && l <= 40))) return json({ error: 'planche refusée' }, 400)
+        try { return json(await lireMots(env, b.image, L)) } catch (e) { return json({ error: e.message }, 502) }
       }
       try { return json(await lireDefs(env, b.image)) } catch (e) { return json({ error: e.message }, 502) }
     }
