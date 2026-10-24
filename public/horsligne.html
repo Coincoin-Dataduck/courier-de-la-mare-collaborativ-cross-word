@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Hors ligne — Le Courrier de la Mare</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%232c6a48'/%3E%3Ctext x='16' y='24' font-size='22' font-family='serif' font-weight='700' fill='%23f1ede2' text-anchor='middle'%3EM%3C/text%3E%3C/svg%3E">
+<link rel="preload" href="/fonts/NimbusMonoPS-Bold.otf" as="font" type="font/otf" crossorigin>
+<link rel="stylesheet" href="/journal.css">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#ebe6da">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="La Mare">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}))</script>
+</head><body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    
+    <filter id="graphite" x="-5%" y="-5%" width="110%" height="110%"><feTurbulence type="fractalNoise" baseFrequency="1.5" numOctaves="2" seed="9" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="1.2" xChannelSelector="R" yChannelSelector="G" result="d"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.6 1.9" result="m"/><feComposite in="d" in2="m" operator="in"/></filter><filter id="stamp"><feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="2" seed="4" result="n"/><feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.2 1.9" result="m"/><feComposite in="SourceGraphic" in2="m" operator="in" result="c"/><feTurbulence type="fractalNoise" baseFrequency=".04" numOctaves="2" seed="2" result="t"/><feDisplacementMap in="c" in2="t" scale="3"/></filter><filter id="press" x="-1%" y="-3%" width="102%" height="106%">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="4" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="0.9" xChannelSelector="R" yChannelSelector="G" result="d"/>
+      <feGaussianBlur in="d" stdDeviation=".22" result="b"/>
+      <feTurbulence type="fractalNoise" baseFrequency=".55" numOctaves="2" seed="14" result="w"/>
+      <feColorMatrix in="w" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.2 1.55" result="wm"/>
+      <feComposite in="b" in2="wm" operator="in"/>
+    </filter>
+    
+    <filter id="fib" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".85 .55" numOctaves="3" seed="21"/>
+      <feColorMatrix values="0 0 0 0 .38  0 0 0 0 .34  0 0 0 0 .27  0 0 0 -.8 .5"/>
+    </filter>
+    <filter id="cloud" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency=".012" numOctaves="3" seed="5"/>
+      <feColorMatrix values="0 0 0 0 .55  0 0 0 0 .5  0 0 0 0 .38  0 0 0 -1.2 .62"/>
+    </filter>
+  </defs>
+</svg>
+
+<section class="page carte solo">
+  <div class="tex"><svg preserveAspectRatio="none"><rect width="100%" height="100%" filter="url(#fib)" opacity=".5"/><rect width="100%" height="100%" filter="url(#cloud)" opacity=".35"/></svg></div>
+  <p class="k">Hors ligne</p>
+  <h2 class="q ink">Pas de réseau</h2>
+  <p class="txt">Le facteur ne passe pas : les grilles se remplissent à plusieurs, il faut une connexion.</p>
+  <p class="txt"><a href="" onclick="location.reload();return false">Réessayer</a></p>
+</section>
+</body></html>
