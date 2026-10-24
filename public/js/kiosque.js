@@ -30,7 +30,13 @@ function mini(g) {
   for (let i = 1; i < g.rows; i++) l += 'M0 ' + i * s + 'H' + W
   return '<svg viewBox="-1 -1 ' + (W + 2) + ' ' + (H + 2) + '" aria-hidden="true"><rect width="' + W + '" height="' + H + '" fill="#f7f3ea"/>' + r + '<path d="' + l + '" stroke="#24211d" stroke-width=".4" fill="none"/><rect width="' + W + '" height="' + H + '" stroke="#24211d" stroke-width="1.4" fill="none"/></svg>'
 }
+// « Libération - N°211 : La guerre du cool - Antoine Hinge » → journal « Libération », titre « N°211 : La guerre du cool - Antoine Hinge »
+function journal(g) {
+  const s = String(g.source || '').trim(), m = s.match(/^(.+?)\s+[-–—]\s+(.+)$/)
+  return m ? { nom: m[1], titre: m[2] } : { nom: s, titre: '' }
+}
 function carte(g) {
+  const J = journal(g)
   const rot = ((g.numero * 37) % 7 - 3) * 0.6
   const stp = g.fin === 'double' ? '<div class="stp d">Double tamponné</div>' : g.fin === 'simple' ? '<div class="stp">Tamponné</div>' : ''
   const etat = g.corr ? 'Corrigée · ' + (g.corr.fautes ? g.corr.fautes + ' faute' + (g.corr.fautes > 1 ? 's' : '') : 'sans faute') : g.abandon ? 'Abandonnée à ' + g.pct + ' %' : g.fin ? 'Tous les mots trouvés' : g.pct + ' % rempli'
@@ -38,18 +44,19 @@ function carte(g) {
   return '<a class="mu' + (g.fin ? '' : ' cours') + '" href="/g/' + g.id + '" style="--r:' + rot + 'deg">' +
     '<div class="mt"><span>N° ' + g.numero + '</span><span>' + parution(g) + '</span></div>' +
     '<div class="mm">Le Courrier<br>de la Mare</div>' +
-    '<div class="mb"><span>' + esc(g.source || 'Mots croisés') + '</span><span>' + g.rows + ' × ' + g.cols + '</span></div>' +
-    '<div class="vig">' + mini(g) + '</div>' + stp +
+    '<div class="mb"><span>' + esc(J.nom || 'Mots croisés') + '</span><span>' + g.rows + ' × ' + g.cols + '</span></div>' +
+    (J.titre ? '<div class="ti">' + esc(J.titre) + '</div>' : '') +
+    '<div class="vig">' + mini(g) + stp + '</div>' +
     '<div class="bas"><span class="pct">' + etat + '</span>' + (g.fin ? '' : '<div class="bar"><i style="width:' + g.pct + '%"></i></div>') +
     g.players + ' joueur' + (g.players > 1 ? 's' : '') + '. ' + best + '<br>Dernière lettre : ' + quand(g.last) + '</div></a>'
 }
 function rendu() {
-  const gs = all.filter(g => filtre === 'toutes' || (filtre === 'cours' && !g.fin) || (filtre === 'tamp' && g.fin) || ('s:' + (g.source || '')) === filtre)
+  const gs = all.filter(g => filtre === 'toutes' || (filtre === 'cours' && !g.fin) || (filtre === 'tamp' && g.fin) || ('s:' + journal(g).nom) === filtre)
   $('pres').innerHTML = gs.map(carte).join('')
   $('kq-vide').textContent = all.length ? (gs.length ? '' : 'Rien de ce côté-là du présentoir.') : 'Le kiosque est vide pour l’instant. Le canard attend la prochaine grille.'
 }
 function filtres() {
-  const src = [...new Set(all.map(g => g.source).filter(Boolean))]
+  const src = [...new Set(all.map(g => journal(g).nom).filter(Boolean))]
   const f = [['toutes', 'Toutes'], ['cours', 'En cours'], ['tamp', 'Tamponnées'], ...(src.length > 1 ? src.map(s => ['s:' + s, s]) : [])]
   $('flt').innerHTML = f.map(([k, t]) => '<button data-f="' + esc(k) + '" class="' + (k === filtre ? 'on' : '') + '">' + esc(t) + '</button>').join('')
 }
