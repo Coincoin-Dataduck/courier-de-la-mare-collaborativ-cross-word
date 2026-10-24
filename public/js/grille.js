@@ -17,7 +17,7 @@ let abandon = null, foundSet = new Set(), contestes = {}, ratures = {}
 // Grille corrigée : corr = { justes, total, fautes }, sol = la solution ; voirSol = interrupteur « La solution »
 let corr = null, sol = null, voirSol = false
 const ferme = () => !!(abandon || corr)
-let sel = null, mode = 'ink', ws = null, wsTry = 0, cs = 18, el = [], done = false
+let sel = null, mode = 'ink', ws = null, wsTry = 0, wsTimer = 0, cs = 18, el = [], done = false
 
 function load(k) { try { return JSON.parse(localStorage.getItem(k)) } catch { return null } }
 function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)) } catch {} }
@@ -443,7 +443,7 @@ function etat(t, ko) { const e = $('etat'); e.textContent = t; e.classList.toggl
 
 function connect() {
   const u = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/g/' + gid + '/ws'
-  ws = new WebSocket(u)
+  const sock = ws = new WebSocket(u)
   ws.onopen = async () => {
     etat('')
     if (wsTry > 0) { // on se resynchronise après une coupure
@@ -454,12 +454,20 @@ function connect() {
   }
   ws.onmessage = e => { let m; try { m = JSON.parse(e.data) } catch { return } on(m) }
   ws.onclose = ev => {
+    if (sock !== ws) return   // ancienne connexion déjà remplacée
     if (ev.code === 4004) return perdu()
     etat('Connexion perdue, on rappelle…', true)
     others = {}; online = new Set()
-    setTimeout(connect, Math.min(15000, 800 * 2 ** wsTry++))
+    clearTimeout(wsTimer)
+    wsTimer = setTimeout(connect, Math.min(15000, 800 * 2 ** wsTry++))
   }
 }
+// Retour dans l'app (iPhone : l'app installée coupe la connexion en arrière-plan) :
+// on rappelle tout de suite au lieu d'attendre la fin du délai
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !ws) return
+  if (ws.readyState === 2 || ws.readyState === 3) { clearTimeout(wsTimer); wsTry = 1; connect() }
+})
 
 function moveOther(pid, r, c) {
   for (const [k, o] of Object.entries(others)) if (o.pid === pid) { delete others[k]; const [a, b] = k.split(',').map(Number); draw(a, b) }
