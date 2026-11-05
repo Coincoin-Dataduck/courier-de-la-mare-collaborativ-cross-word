@@ -48,11 +48,61 @@ function traits(run, n) {
   return best ? best.c : null
 }
 
-// Repère la grille dans un canvas. Renvoie { R, C, B, douteuses, nb } ou null.
+// Repère la grille dans un canvas. Renvoie { R, C, B, douteuses, nb, cell(r, c), box } ou null.
+// Deux méthodes : traits droits (capture d'écran, journal à plat), puis traits courbes (photo d'un livre bombé).
+// On garde celle qui trouve la plus grande grille.
 export function lireGrille(cv) {
   const w = cv.width, h = cv.height, d = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data
+  // luminosité, puis « noir » par rapport au papier voisin : une photo a des zones d'ombre
+  const lum = new Float32Array(w * h)
+  for (let i = 0, j = 0; i < w * h; i++, j += 4) lum[i] = d[j] * 0.299 + d[j + 1] * 0.587 + d[j + 2] * 0.114
+  const moy = moyenneLocale(lum, w, h, Math.max(8, Math.round(Math.max(w, h) / 25)))
   const noir = new Uint8Array(w * h)
-  for (let i = 0, j = 0; i < w * h; i++, j += 4) noir[i] = (d[j] * 0.299 + d[j + 1] * 0.587 + d[j + 2] * 0.114) < 150 ? 1 : 0
+  for (let i = 0; i < w * h; i++) noir[i] = lum[i] < 90 || lum[i] < moy[i] * 0.75 ? 1 : 0
+  const a = droite(noir, w, h), b = courbe(noir, w, h)
+  const g = b && (!a || b.R * b.C >= a.R * a.C) ? b : a
+  if (!g) return null
+  const { R, C, cell } = g
+  // luminosité moyenne du centre de chaque case
+  const m = []
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    const { x0, x1, y0, y1 } = cell(r, c)
+    const mx = (x1 - x0) * 0.22, my = (y1 - y0) * 0.22
+    let n = 0, t = 0
+    for (let y = Math.max(0, Math.round(y0 + my)); y <= Math.min(h - 1, Math.round(y1 - my)); y++) for (let x = Math.max(0, Math.round(x0 + mx)); x <= Math.min(w - 1, Math.round(x1 - mx)); x++) { t++; n += lum[y * w + x] }
+    m.push(t ? n / t : 255)
+  }
+  // une case est noire si elle est bien plus sombre que les cases blanches autour d'elle (ombre de la page)
+  let B = '', douteuses = [], nb = 0
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    const v = []
+    for (let i = Math.max(0, r - 2); i <= Math.min(R - 1, r + 2); i++) for (let j = Math.max(0, c - 2); j <= Math.min(C - 1, c + 2); j++) v.push(m[i * C + j])
+    v.sort((a, b) => b - a)
+    const blanc = v[Math.floor(v.length * 0.25)] || 255, f = m[r * C + c] / blanc
+    const est = f < 0.55
+    B += est ? '1' : '0'; if (est) nb++
+    if (f > 0.4 && f < 0.7) douteuses.push([r, c])
+  }
+  return { R, C, B, douteuses, nb, cell, box: g.box }
+}
+
+// Moyenne de la luminosité dans un carré de côté 2k+1 autour de chaque pixel (image intégrale)
+function moyenneLocale(lum, w, h, k) {
+  const I = new Float64Array((w + 1) * (h + 1))
+  for (let y = 0; y < h; y++) { let s = 0; for (let x = 0; x < w; x++) { s += lum[y * w + x]; I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + s } }
+  const o = new Float32Array(w * h)
+  for (let y = 0; y < h; y++) {
+    const a = Math.max(0, y - k), b = Math.min(h, y + k + 1)
+    for (let x = 0; x < w; x++) {
+      const c = Math.max(0, x - k), e = Math.min(w, x + k + 1)
+      o[y * w + x] = (I[b * (w + 1) + e] - I[a * (w + 1) + e] - I[b * (w + 1) + c] + I[a * (w + 1) + c]) / ((b - a) * (e - c))
+    }
+  }
+  return o
+}
+
+// Traits droits sur toute la largeur de l'image
+function droite(noir, w, h) {
   const runR = new Int32Array(h), runC = new Int32Array(w)
   for (let y = 0; y < h; y++) { let r = 0, m = 0; for (let x = 0; x < w; x++) { r = noir[y * w + x] ? r + 1 : 0; if (r > m) m = r } runR[y] = m }
   for (let x = 0; x < w; x++) { let r = 0, m = 0; for (let y = 0; y < h; y++) { r = noir[y * w + x] ? r + 1 : 0; if (r > m) m = r } runC[x] = m }
@@ -60,18 +110,113 @@ export function lireGrille(cv) {
   if (!ys || !xs) return null
   const R = ys.length - 1, C = xs.length - 1
   if (R < 3 || C < 3 || R > 40 || C > 40) return null
-  let B = '', douteuses = [], nb = 0
-  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
-    const x0 = xs[c], x1 = xs[c + 1], y0 = ys[r], y1 = ys[r + 1]
-    const mx = (x1 - x0) * 0.22, my = (y1 - y0) * 0.22
-    let n = 0, t = 0
-    for (let y = Math.round(y0 + my); y <= Math.round(y1 - my); y++) for (let x = Math.round(x0 + mx); x <= Math.round(x1 - mx); x++) { t++; n += noir[y * w + x] }
-    const f = t ? n / t : 0
-    const est = f > 0.7
-    B += est ? '1' : '0'; if (est) nb++
-    if (f > 0.45 && f < 0.88) douteuses.push([r, c])
+  return { R, C, cell: (r, c) => ({ x0: xs[c], x1: xs[c + 1], y0: ys[r], y1: ys[r + 1] }), box: { x0: xs[0], x1: xs[C], y0: ys[0], y1: ys[R] } }
+}
+
+// Traits courbes : on coupe l'image en bandes étroites, où chaque trait est presque droit,
+// puis on relie les morceaux d'une bande à l'autre (le trait suit la page, même là où elle plie fort).
+function courbe(noir, w, h) {
+  const e = Math.max(2, Math.round(Math.max(w, h) / 500)) // épaississement : le trait penche un peu dans la bande
+  const hz = familles(noir, w, h, e, true), vt = familles(noir, w, h, e, false)
+  if (!hz || !vt) return null
+  const R = hz.length - 1, C = vt.length - 1
+  if (R < 3 || C < 3 || R > 40 || C > 40) return null
+  const Y = (i, x) => hz[i](x), X = (i, y) => vt[i](y)
+  const cell = (r, c) => {
+    let x = (X(c, h / 2) + X(c + 1, h / 2)) / 2, y = 0
+    for (let k = 0; k < 4; k++) { y = (Y(r, x) + Y(r + 1, x)) / 2; x = (X(c, y) + X(c + 1, y)) / 2 }
+    return { x0: X(c, y), x1: X(c + 1, y), y0: Y(r, x), y1: Y(r + 1, x) }
   }
-  return { R, C, B, douteuses, nb, xs, ys, box: { x0: xs[0], x1: xs[C], y0: ys[0], y1: ys[R] } }
+  const coins = [cell(0, 0), cell(0, C - 1), cell(R - 1, 0), cell(R - 1, C - 1)]
+  const box = { x0: Math.min(coins[0].x0, coins[2].x0), x1: Math.max(coins[1].x1, coins[3].x1), y0: Math.min(coins[0].y0, coins[1].y0), y1: Math.max(coins[2].y1, coins[3].y1) }
+  return { R, C, cell, box }
+}
+
+// Les traits d'une direction : pour chaque trait, une fonction position(x) (y(x) pour les horizontaux, x(y) pour les verticaux)
+function familles(noir, w, h, e, horiz) {
+  const L = horiz ? w : h, P = horiz ? h : w, NB = 16
+  const bandes = []
+  for (let s = 0; s < NB; s++) {
+    const a = Math.round(L * (0.03 + 0.94 * s / NB)), b = Math.round(L * (0.03 + 0.94 * (s + 1) / NB))
+    // pour chaque position p (ligne de pixels), part de la bande couverte par du noir à ± e près
+    const prof = new Float32Array(P)
+    for (let q = a; q < b; q++) {
+      let cnt = 0 // fenêtre glissante de 2e+1 pixels le long de p
+      for (let p = 0; p < P + e; p++) {
+        if (p < P) cnt += horiz ? noir[p * w + q] : noir[q * w + p]
+        if (p - 2 * e - 1 >= 0) cnt -= horiz ? noir[(p - 2 * e - 1) * w + q] : noir[q * w + p - 2 * e - 1]
+        const m = p - e; if (m >= 0 && m < P && cnt) prof[m]++
+      }
+    }
+    const cl = []
+    for (let p = 0; p < P; p++) if (prof[p] >= (b - a) * 0.95) { const d = cl[cl.length - 1]; if (d && p - d.b <= 2) d.b = p; else cl.push({ a: p, b: p }) }
+    const pos = reguliers(cl.map(x => (x.a + x.b) / 2))
+    if (pos.length >= 5) bandes.push({ m: (a + b) / 2, pos })
+  }
+  if (!bandes.length) return null
+  // le nombre de traits le plus fréquent d'une bande à l'autre
+  const freq = {}; for (const x of bandes) freq[x.pos.length] = (freq[x.pos.length] || 0) + 1
+  const n = +Object.keys(freq).sort((a, b) => freq[b] - freq[a] || b - a)[0]
+  const ok = bandes.filter(x => x.pos.length === n)
+  if (ok.length < 2) return null
+  // on part de la bande complète la plus centrale, puis on suit chaque trait pas à pas
+  // vers les deux bords : il épouse la page même là où elle plie fort
+  const mil = ok.reduce((best, x) => Math.abs(x.m - L / 2) < Math.abs(best.m - L / 2) ? x : best)
+  const pas = (mil.pos[n - 1] - mil.pos[0]) / (n - 1)
+  return mil.pos.map(p0 => tracer(noir, w, h, horiz, Math.round(mil.m), Math.round(p0), pas, e))
+}
+
+// Suit un trait depuis (m0, p0) : m avance le long du trait, p est sa position en travers
+function tracer(noir, w, h, horiz, m0, p0, pas, e) {
+  const L = horiz ? w : h, P = horiz ? h : w, st = 2 * e, fen = Math.max(2, Math.round(pas * 0.18))
+  const at = (m, p) => horiz ? noir[p * w + m] : noir[m * w + p]
+  const pts = [[m0, p0]]
+  for (const sens of [1, -1]) {
+    let p = p0, pente = 0, vide = 0
+    for (let m = m0 + sens * st; m >= 0 && m + st < L; m += sens * st) {
+      const pr = p + pente * st * sens
+      // pour chaque position en travers, combien de pixels noirs le long de ce petit segment
+      let bestP = -1, bestN = 0, nPlein = 0
+      for (let q = Math.round(pr - fen); q <= Math.round(pr + fen); q++) {
+        if (q < 0 || q >= P) continue
+        let n = 0; for (let k = 0; k < st; k++) n += at(m + k * sens, q)
+        if (n >= st * 0.8) nPlein++
+        if (n > bestN || (n === bestN && Math.abs(q - pr) < Math.abs(bestP - pr))) { bestN = n; bestP = q }
+      }
+      if (bestN < st * 0.6) { if (++vide > 3) break; p = Math.round(pr); continue } // fin du trait (après un petit trou toléré)
+      vide = 0
+      // dans une case noire tout est noir : on garde la trajectoire prévue
+      const q = nPlein > fen ? pr : bestP
+      pente = 0.7 * pente + 0.3 * ((q - p) / st) * sens
+      p = Math.round(q); pts.push([m, q])
+    }
+  }
+  pts.sort((a, b) => a[0] - b[0])
+  return relier(pts.map(x => x[0]), pts.map(x => x[1]))
+}
+
+// Garde la plus longue suite de traits à peu près régulièrement espacés (écarte bord de page, texte, ombre)
+function reguliers(c) {
+  let best = []
+  for (let s = 0; s < c.length - 1; s++) {
+    const pas = c[s + 1] - c[s]; if (pas < 6) continue
+    let e = s + 1, p = pas
+    while (e + 1 < c.length && Math.abs(c[e + 1] - c[e] - p) <= Math.max(2, p * 0.2)) { p = (p + c[e + 1] - c[e]) / 2; e++ }
+    if (e - s + 1 > best.length) best = c.slice(s, e + 1)
+  }
+  return best
+}
+
+// Relie les points mesurés bande par bande ; au-delà des bandes extrêmes, prolonge en ligne droite
+function relier(M, P) {
+  return v => {
+    const n = M.length
+    let lo = 0, hi = n - 2
+    while (lo < hi) { const k = (lo + hi + 1) >> 1; if (M[k] <= v) lo = k; else hi = k - 1 }
+    const i = lo
+    const t = (v - M[i]) / (M[i + 1] - M[i])
+    return P[i] + t * (P[i + 1] - P[i])
+  }
 }
 
 // Range les définitions lues ({ h:[{n,t}], v:[{n,t}] }) dans les mots de la grille, par numéro.
@@ -133,7 +278,7 @@ export function planche(cv, g, mots) {
     const y = 22 + i * (T + 22)
     x.fillStyle = '#777'; x.fillText((i + 1) + ' :', 10, y + T / 2)
     m.forEach(([r, c], k) => {
-      const x0 = g.xs[c], x1 = g.xs[c + 1], y0 = g.ys[r], y1 = g.ys[r + 1], mx = (x1 - x0) * 0.17, my = (y1 - y0) * 0.17
+      const { x0, x1, y0, y1 } = g.cell(r, c), mx = (x1 - x0) * 0.17, my = (y1 - y0) * 0.17
       x.drawImage(cv, x0 + mx, y0 + my, x1 - x0 - 2 * mx, y1 - y0 - 2 * my, LAB + k * (T + G), y, T, T)
     })
   })
