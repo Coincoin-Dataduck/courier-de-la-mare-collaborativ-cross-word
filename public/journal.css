@@ -463,3 +463,6 @@ body.enjeu .m-dq small{display:none}
 @media (max-width:700px){.cap-cols,.cap-two{grid-template-columns:1fr}}
 .cap-mg i{display:flex;align-items:center;justify-content:center;font:700 calc(var(--cs)*.62)/1 Narrow,sans-serif;color:var(--ink)}
 .cap-mg i.vu{background:#fff}
+.cap-fmt{margin:2px 0 4px 24px}.cap-fmt .cap-ck{font-size:15px;align-items:flex-start}.cap-fmt input{margin-top:3px;flex:none}
+.cap-coll{margin-top:10px;font:400 15px Times,serif;color:var(--grey)}.cap-coll summary{cursor:pointer}
+.cap-coll textarea{display:block;width:100%;box-sizing:border-box;margin:8px 0;font:400 16px/1.35 Times,serif;padding:8px;border:1px solid var(--ink);background:#fbf8f1;color:var(--ink)}
