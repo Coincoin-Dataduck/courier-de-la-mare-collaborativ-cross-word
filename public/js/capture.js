@@ -139,3 +139,95 @@ export function planche(cv, g, mots) {
   })
   return o.toDataURL('image/jpeg', 0.92)
 }
+
+// ---------- Définitions groupées par ligne et par colonne (Le Monde, Michel Laclos…) ----------
+// « III. Bain-douche. Roulé par Carmen. Morceaux pour baryton. » = les trois mots de la ligne III, de gauche à droite.
+
+const ROM = { I: 1, V: 5, X: 10, L: 50, C: 100 }
+export function romain(s) {
+  s = String(s).toUpperCase(); if (!/^[IVXLC]+$/.test(s)) return 0
+  let n = 0; for (let i = 0; i < s.length; i++) { const a = ROM[s[i]], b = ROM[s[i + 1]] || 0; n += a < b ? -a : a }
+  return n
+}
+export const versRomain = n => [[100, 'C'], [90, 'XC'], [50, 'L'], [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']].reduce((s, [v, l]) => { while (n >= v) { s += l; n -= v } return s }, '')
+
+// Coupe le texte d'une ligne en définitions : après . ? ! … suivi d'une majuscule, d'un chiffre ou d'un guillemet.
+// On ne coupe pas après une initiale ou une abréviation (« M. Dupont », « J.-C. », « St. »).
+const ABREV = /(?:^|[\s(«"'’-])(?:\p{Lu}|M|MM|Mme|Mlle|Mgr|Dr|St|Ste|cf|etc|av|apr|env|ex)\.$/u
+export function decouper(t, attendu) {
+  const prudent = couper(t, true)
+  if (!attendu || prudent.length === attendu) return prudent
+  const tout = couper(t, false) // on coupe aussi après les abréviations si ça tombe juste
+  return tout.length === attendu ? tout : prudent
+}
+function couper(t, prudent) {
+  const out = []; let cur = '', i = 0, m
+  const re = /([.?!…]+)(\s+)(?=[\p{Lu}0-9«"(])/gu
+  while ((m = re.exec(t))) {
+    cur += t.slice(i, m.index + m[1].length); i = m.index + m[0].length
+    if (prudent && m[1] === '.' && ABREV.test(cur)) { cur += m[2]; continue }
+    out.push(cur.trim()); cur = ''
+  }
+  cur += t.slice(i); if (cur.trim()) out.push(cur.trim())
+  return out.filter(Boolean)
+}
+
+// Range { h:[{n,t}], v:[{n,t}] } où n = numéro de ligne (h) ou de colonne (v) et t = toutes ses définitions.
+// Renvoie { clues, n, perdues, ecarts: ['Ligne III : 4 définitions pour 3 mots', …] }
+export function rangerLignes(W, lu) {
+  const clues = {}, perdues = [], ecarts = []; let n = 0
+  for (const d of ['h', 'v']) for (const x of (lu && lu[d]) || []) {
+    const k = +x.n - 1, nom = d === 'h' ? 'ligne ' + versRomain(+x.n) : 'colonne ' + x.n
+    const mots = W[d].filter(w => (d === 'h' ? w.cells[0][0] : w.cells[0][1]) === k)
+    const defs = decouper(x.t || '', mots.length)
+    if (!mots.length) { perdues.push(nom); continue }
+    if (defs.length !== mots.length) ecarts.push(nom + ' : ' + defs.length + ' déf. pour ' + mots.length + ' mot' + (mots.length > 1 ? 's' : ''))
+    mots.forEach((w, i) => {
+      // trop de définitions : le reste va dans le dernier mot, pour ne rien perdre
+      const t = i === mots.length - 1 ? defs.slice(i).join(' ') : defs[i]
+      if (t) { clues[w.id] = t.slice(0, 300); n++ }
+    })
+  }
+  return { clues, n, perdues, ecarts }
+}
+
+// Les définitions lues ressemblent-elles au format par ligne ?
+// (l'IA le signale ; sinon : plusieurs définitions par numéro et pas plus de numéros que de lignes / colonnes)
+export function parLignes(lu, R, C) {
+  if (!lu) return false
+  if (lu.format === 'ligne') return true
+  if (lu.format === 'mot') return false
+  const h = lu.h || [], v = lu.v || [], all = [...h, ...v]
+  if (!all.length) return false
+  const multi = all.filter(x => decouper(x.t).length > 1).length
+  return h.every(x => x.n <= R) && v.every(x => x.n <= C) && multi >= all.length / 2
+}
+
+// Texte collé (Texte en direct de l'iPhone, copier-coller d'un PDF…) → { format, h, v }, sans IA.
+// « Horizontalement. I. … - II. … Verticalement. 1. … - 2. … », numéros romains ou arabes.
+export function lireTexte(txt) {
+  let t = String(txt || '').replace(/\r/g, '')
+    .replace(/(\p{L})-\n\s*(\p{Ll})/gu, '$1$2') // mots coupés en fin de ligne
+    .replace(/\s+/g, ' ').trim()
+  const iH = t.search(/horizontalement/i), iV = t.search(/verticalement/i)
+  const part = (a, b) => a < 0 ? '' : t.slice(a, b > a ? b : undefined).replace(/^\S+\s*[.:]?\s*/, '')
+  const out = { h: suite(part(iH, iV)), v: suite(part(iV, iH)) }
+  const rom = /^\s*[IVXLC]+\s*\./.test(part(iH, iV))
+  out.format = rom || [...out.h, ...out.v].some(x => decouper(x.t).length > 1) ? 'ligne' : 'mot'
+  return out
+}
+// Découpe une section en numéros successifs : on cherche 1 (ou I), puis 2 (ou II)… dans l'ordre
+function suite(s) {
+  const L = []; if (!s) return L
+  const rom = /^[IVXLC]+\s*\./.test(s)
+  const tok = n => rom ? versRomain(n) : String(n)
+  let pos = 0, n = 1, deb = null
+  for (;;) {
+    const re = new RegExp('(^|[\\s—–-])' + tok(n) + '\\s*\\.\\s', 'g'); re.lastIndex = pos
+    const m = re.exec(s); if (!m) break
+    if (deb) L.push({ n: n - 1, t: s.slice(deb, m.index).replace(/\s*[—–-]\s*$/, '').trim() })
+    deb = m.index + m[0].length; pos = deb; n++
+  }
+  if (deb) L.push({ n: n - 1, t: s.slice(deb).replace(/\s*[—–-]\s*$/, '').trim() })
+  return L.filter(x => x.t)
+}

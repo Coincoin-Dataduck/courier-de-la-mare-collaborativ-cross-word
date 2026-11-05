@@ -1,6 +1,6 @@
 // Le Courrier de la Mare — la salle de rédaction (admin)
 import { words, mirror } from './shared.js'
-import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche } from './capture.js'
+import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche, rangerLignes, parLignes, lireTexte, versRomain as romain } from './capture.js'
 
 const $ = id => document.getElementById(id)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -369,9 +369,15 @@ liste()
 // ---------- lire une capture ----------
 const LAPI = API.replace(/\/grids$/, '/lire')
 let lu = null, capMode = null
-function capReset() { lu = null; $('cap-drop').classList.remove('hide'); $('cap-lit').classList.add('hide'); $('cap-res').classList.add('hide') }
+function capReset() { lu = null; $('cap-drop').classList.remove('hide'); $('cap-coll').classList.toggle('hide', mode === 'sol'); $('cap-lit').classList.add('hide'); $('cap-res').classList.add('hide') }
 $('cap-ouvrir').onclick = () => { $('cap').classList.toggle('hide'); capReset() }
 $('cap-drop').onclick = () => $('cap-file').click()
+$('cap-txt-ok').onclick = () => {
+  const t = $('cap-txt').value; if (!t.trim()) return
+  const d = lireTexte(t)
+  if (!d.h.length && !d.v.length) { alert('Je ne trouve ni « Horizontalement » ni « Verticalement » suivis de numéros.'); return }
+  lu = { g: null, defs: d, texte: true }; $('cap-drop').classList.add('hide'); $('cap-coll').classList.add('hide'); capMontrer('')
+}
 $('cap-drop').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('cap-file').click() } }
 $('cap-file').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) capLire(f) }
 $('cap-drop').ondragover = e => { e.preventDefault(); $('cap-drop').classList.add('sur') }
@@ -384,7 +390,7 @@ document.addEventListener('paste', e => {
   e.preventDefault(); capLire(it.getAsFile())
 })
 async function capLire(f) {
-  $('cap-drop').classList.add('hide'); $('cap-lit').classList.remove('hide'); $('cap-res').classList.add('hide')
+  $('cap-drop').classList.add('hide'); $('cap-coll').classList.add('hide'); $('cap-lit').classList.remove('hide'); $('cap-res').classList.add('hide')
   let im
   try { im = await chargerImage(f) } catch (e) { capReset(); alert(e.message); return }
   if (mode === 'sol') return capLireSol(im)
@@ -412,8 +418,10 @@ function capMontrer(err) {
   const g = lu.g, dh = (lu.defs && lu.defs.h) || [], dv = (lu.defs && lu.defs.v) || [], nd = dh.length + dv.length
   const titre = [], notes = []
   if (g) titre.push(g.R + ' × ' + g.C, g.nb + ' case' + (g.nb > 1 ? 's noires' : ' noire'))
-  if (nd) titre.push(nd + ' définition' + (nd > 1 ? 's' : ''))
-  if (!g) notes.push('Pas de grille repérée sur l’image.')
+  const pl = nd && parLignes(lu.defs, g ? g.R : R, g ? g.C : C)
+  if (nd) titre.push(pl ? dh.length + ' lignes, ' + dv.length + ' colonnes de définitions' : nd + ' définition' + (nd > 1 ? 's' : ''))
+  if (lu.texte) notes.push('Les définitions iront dans la grille déjà dessinée (' + R + ' × ' + C + ').')
+  else if (!g) notes.push('Pas de grille repérée sur l’image.')
   else {
     if (g.R !== R || g.C !== C) notes.push('La grille de l’éditeur passera en ' + g.R + ' × ' + g.C + '.')
     if (g.douteuses.length) notes.push('Les cases entourées en vert sont peu nettes sur l’image : jette un œil.')
@@ -423,8 +431,12 @@ function capMontrer(err) {
   let h = '<div class="cap-cols">' + (g ? '<div>' + capMini(g) + '</div>' : '') + '<div class="cap-r"><h4>' + esc(titre.join(' · ') || 'Rien trouvé sur l’image') + '</h4>'
   h += '<p class="cap-s">' + esc(notes.join(' ')) + '</p>'
   h += '<label class="cap-ck"><input type="checkbox" id="cap-n"' + (g ? ' checked' : ' disabled') + '> Placer les cases noires</label>'
-  h += '<label class="cap-ck"><input type="checkbox" id="cap-d"' + (nd ? ' checked' : ' disabled') + '> Remplir les définitions (rangées par numéro)</label>'
-  if (nd) h += '<div class="cap-two">' + capCol('Horizontalement', dh) + capCol('Verticalement', dv) + '</div>'
+  h += '<label class="cap-ck"><input type="checkbox" id="cap-d"' + (nd ? ' checked' : ' disabled') + '> Remplir les définitions</label>'
+  if (nd) {
+    h += '<div class="cap-fmt"><label class="cap-ck"><input type="radio" name="cap-f" value="mot"' + (pl ? '' : ' checked') + '> Un numéro par mot (1, 2, 3… dans les cases)</label>' +
+      '<label class="cap-ck"><input type="radio" name="cap-f" value="ligne"' + (pl ? ' checked' : '') + '> Un numéro par ligne et par colonne (I, II… et 1, 2…, plusieurs définitions par numéro, comme Laclos ou Le Monde)</label></div>'
+  }
+  if (nd) h += '<div class="cap-two">' + capCol('Horizontalement', pl ? dh.map(x => ({ ...x, n: romain(x.n) })) : dh) + capCol('Verticalement', dv) + '</div>'
   h += '<div class="cap-acts"><button class="pbtn cap-vert" id="cap-ok"' + (g || nd ? '' : ' disabled') + '>Mettre dans la grille</button><button class="pbtn" id="cap-non">Annuler</button><button class="pbtn" id="cap-autre">Une autre image</button><span class="cap-s">Tu pourras tout retoucher avant d’enregistrer.</span></div></div></div>'
   $('cap-lit').classList.add('hide'); $('cap-res').innerHTML = h; $('cap-res').classList.remove('hide')
 }
@@ -443,9 +455,11 @@ function capMettre() {
   const msg = []
   if (n) { R = lu.g.R; C = lu.g.C; B = lu.g.B; $('f-rows').value = R; $('f-cols').value = C; grille(); msg.push(lu.g.nb + ' cases noires placées') }
   if (d) {
-    const r = ranger(W, lu.defs); clues = r.clues; defs()
+    const f = document.querySelector('input[name="cap-f"]:checked'), lig = f && f.value === 'ligne'
+    const r = lig ? rangerLignes(W, lu.defs) : ranger(W, lu.defs); clues = r.clues; defs()
     msg.push(r.n + ' définition' + (r.n > 1 ? 's rangées' : ' rangée'))
     if (r.perdues.length) msg.push(r.perdues.length + ' à vérifier, sans mot à ce numéro (' + r.perdues.slice(0, 6).join(', ') + (r.perdues.length > 6 ? '…' : '') + ')')
+    if (r.ecarts && r.ecarts.length) msg.push('à relire, le compte ne tombe pas juste : ' + r.ecarts.slice(0, 6).join(' ; ') + (r.ecarts.length > 6 ? '…' : ''))
   }
   dirty = true; setMode('def'); $('cap').classList.add('hide'); capReset()
   $('ed-etat').textContent = msg.join(' · ') + '. N’oublie pas d’enregistrer.'
