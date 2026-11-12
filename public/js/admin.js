@@ -1,6 +1,6 @@
 // Le Courrier de la Mare — la salle de rédaction (admin)
 import { words, mirror } from './shared.js'
-import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche, rangerLignes, parLignes, lireTexte, versRomain as romain, LECTURE } from './capture.js?v=4'
+import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche, rangerLignes, parLignes, lireTexte, reparer, versRomain as romain, LECTURE } from './capture.js?v=5'
 
 const $ = id => document.getElementById(id)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -425,7 +425,7 @@ async function capLire(f) {
     const r = await fetch(LAPI, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image: pourEnvoi(im) }) })
     const d = await r.json().catch(() => ({}))
     if (!r.ok) throw new Error(d.error || 'erreur ' + r.status)
-    lu.defs = d
+    lu.defs = reparer(d)
   } catch (e) { err = e.message }
   lu.tdefs = tailleDefs(lu.defs)
   // pas de grille trouvée, mais les définitions donnent la taille : on la propose pour la pose à la main
@@ -488,6 +488,7 @@ function capMaj() {
     if (g.douteuses.length) notes.push('Les cases entourées en vert sont peu nettes sur l’image : jette un œil.')
     if (lu.retouches) notes.push(lu.retouches + ' case' + (lu.retouches > 1 ? 's retouchées' : ' retouchée') + ' à la main.')
   }
+  if (lu.defs && lu.defs.repare) notes.push('Définitions regroupées par la lecture, redécoupées par numéro (' + lu.defs.repare + ').')
   if (lu.err) notes.push('Définitions non lues : ' + lu.err + '.')
   else if (!nd && !lu.texte) notes.push('Pas de définitions trouvées.')
   $('cap-titre').textContent = titre.join(' · ') || 'Rien trouvé sur l’image'

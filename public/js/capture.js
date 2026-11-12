@@ -592,6 +592,19 @@ export function lireTexte(txt) {
   out.format = rom || [...out.h, ...out.v].some(x => decouper(x.t).length > 1) ? 'ligne' : 'mot'
   return out
 }
+// L'IA met parfois plusieurs numéros dans une seule entrée (tout le texte sous « 1 »). On recompose le texte
+// et on le redécoupe comme un texte collé ; on garde ce redécoupage s'il trouve nettement plus de numéros.
+export function reparer(d) {
+  if (!d) return d
+  const h = d.h || [], v = d.v || [], avant = h.length + v.length
+  if (!avant) return d
+  const rom = d.format === 'ligne' || h.some(x => /(^|[\s—–-])[IVX]{2,}\s*\.\s/.test(x.t))
+  const sec = (L, r) => L.map(x => (r ? versRomain(+x.n) : x.n) + '. ' + x.t).join(' - ')
+  const txt = 'Horizontalement. ' + sec(h, rom) + (v.length ? ' Verticalement. ' + sec(v, false) : '')
+  const r = lireTexte(txt), apres = r.h.length + r.v.length
+  if (apres < avant + 2) return d
+  return { ...d, h: r.h, v: r.v, format: d.format || r.format, repare: avant + ' → ' + apres }
+}
 // Découpe une section en numéros successifs : on cherche 1 (ou I), puis 2 (ou II)… dans l'ordre
 function suite(s) {
   const L = []; if (!s) return L

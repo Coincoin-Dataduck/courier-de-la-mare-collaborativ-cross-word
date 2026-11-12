@@ -9,6 +9,7 @@ Réponds uniquement avec du JSON, sans aucun autre texte : {"format":"mot","h":[
 - Recolle les mots coupés en fin de ligne par un tiret (« grat-ter » devient « gratter »), garde les vrais traits d'union.
 - Garde la ponctuation, les guillemets et les majuscules d'origine.
 - Ignore le titre, l'auteur, la grille et les solutions.
+- Une entrée par numéro : ne mets JAMAIS plusieurs numéros (« - II. », « 3. ») dans le même t. Recopie TOUS les numéros jusqu'au dernier, sans t'arrêter en route.
 - Si une seule direction est visible, laisse l'autre liste vide.`
 
 export async function lireDefs(env, image) {
@@ -19,7 +20,7 @@ export async function lireDefs(env, image) {
         { role: 'system', content: CONSIGNE },
         { role: 'user', content: [{ type: 'text', text: 'Recopie les définitions de cette capture.' }, { type: 'image_url', image_url: { url: image } }] }
       ],
-      max_tokens: 6000, temperature: 0
+      max_tokens: 8000, temperature: 0
     })
   } catch (e) { throw new Error('la lecture a échoué (' + ((e && e.message) || e) + ')') }
   return nettoyer(r && r.response)
@@ -35,7 +36,7 @@ export function nettoyer(x) {
   }
   const out = { h: [], v: [], format: o && (o.format === 'ligne' || o.format === 'mot') ? o.format : '' }
   for (const d of ['h', 'v']) for (const e of (o && Array.isArray(o[d]) ? o[d] : [])) {
-    const n = parseInt(e && e.n, 10), t = String((e && e.t) || '').replace(/\s+/g, ' ').trim().slice(0, 600)
+    const n = parseInt(e && e.n, 10), t = String((e && e.t) || '').replace(/\s+/g, ' ').trim().slice(0, 5000)
     if (n > 0 && n < 1000 && t) out[d].push({ n, t })
   }
   return out
