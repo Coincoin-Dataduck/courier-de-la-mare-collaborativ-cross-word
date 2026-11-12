@@ -2,7 +2,7 @@
 import { Grid } from './grid.js'
 import { Registry } from './registry.js'
 import { matin, annonce, poster } from './matin.js'
-import { lireDefs, lireMots } from './lire.js'
+import { lireDefs, lireDefsJson, lireMots } from './lire.js'
 export { Grid, Registry }
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' } })
@@ -49,6 +49,7 @@ export default {
         if (!L.length || L.length > 40 || L.some(l => !(l >= 2 && l <= 40))) return json({ error: 'planche refusée' }, 400)
         try { return json(await lireMots(env, b.image, L)) } catch (e) { return json({ error: e.message }, 502) }
       }
+      if (b.mode === 'json') { try { return json(await lireDefsJson(env, b.image)) } catch (e) { return json({ error: e.message }, 502) } }
       try { return json(await lireDefs(env, b.image)) } catch (e) { return json({ error: e.message }, 502) }
     }
     // Réglages du message du matin : /api/admin/<secret>/discord[/apercu|/envoyer]

@@ -1,6 +1,6 @@
 // Le Courrier de la Mare — la salle de rédaction (admin)
 import { words, mirror } from './shared.js'
-import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche, rangerLignes, parLignes, lireTexte, reparer, versRomain as romain, LECTURE } from './capture.js?v=7'
+import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche, rangerLignes, parLignes, lireTexte, reparer, versRomain as romain, LECTURE } from './capture.js?v=9'
 
 const $ = id => document.getElementById(id)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -427,12 +427,29 @@ async function capLire(f) {
   lu = { cv: versCanvas(im, 2400), photo: im.naturalWidth + '×' + im.naturalHeight, defs: null }
   capAnalyser({})
   let err = ''
-  try {
-    const r = await fetch(LAPI, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image: pourEnvoi(im) }) })
+  const image = pourEnvoi(im)
+  const demander = async mode => {
+    const corps = JSON.stringify(mode ? { image, mode } : { image })
+    let r
+    try { r = await fetch(LAPI, { method: 'POST', headers: { 'content-type': 'application/json' }, body: corps }) }
+    catch {
+      // connexion coupée (« Load failed » sur iPhone) : on réessaie une fois
+      await new Promise(f => setTimeout(f, 1500))
+      try { r = await fetch(LAPI, { method: 'POST', headers: { 'content-type': 'application/json' }, body: corps }) }
+      catch { throw new Error('la connexion a été coupée pendant la lecture (garde l’écran allumé et l’appli ouverte, puis réessaie)') }
+    }
     const d = await r.json().catch(() => ({}))
     if (!r.ok) throw new Error(d.error || 'erreur ' + r.status)
+    return d
+  }
+  try {
+    const d = await demander()
     if (typeof d.texte === 'string') { lu.texteIA = d.texte; lu.defs = defsDuTexte(d.texte) }
     else lu.defs = reparer(d)
+    // texte lu sans numéros reconnaissables : on essaie l'ancienne lecture (l'IA range elle-même)
+    if (!lu.defs && typeof d.texte === 'string' && d.texte.length > 40) {
+      try { const d2 = reparer(await demander('json')); if ((d2.h || []).length + (d2.v || []).length) { lu.defs = d2; lu.secours = true } } catch {}
+    }
   } catch (e) { err = e.message }
   lu.tdefs = tailleDefs(lu.defs)
   // pas de grille trouvée, mais les définitions donnent la taille : on la propose pour la pose à la main
@@ -469,7 +486,7 @@ function capMontrer(err) {
       '<label class="cap-ck"><input type="radio" name="cap-f" value="ligne"' + (pl ? ' checked' : '') + '> Un numéro par ligne et par colonne (I, II… et 1, 2…, plusieurs définitions par numéro, comme Laclos ou Le Monde)</label></div>'
     h += '<div class="cap-two">' + capCol('Horizontalement', pl ? dh.map(x => ({ ...x, n: romain(x.n) })) : dh) + capCol('Verticalement', dv) + '</div>'
   }
-  if (typeof lu.texteIA === 'string') h += '<details class="cap-coll cap-tia"' + (lu.tiaOuvert ? ' open' : '') + '><summary>Texte lu sur la photo (corrige-le si une définition manque)</summary><textarea id="cap-tia" rows="10">' + esc(lu.texteIA) + '</textarea><button class="pbtn" id="cap-tia-ok">Relire ce texte</button></details>'
+  if (typeof lu.texteIA === 'string') h += '<details class="cap-coll cap-tia"' + (lu.tiaOuvert || !nd ? ' open' : '') + '><summary>Texte lu sur la photo (corrige-le si une définition manque)</summary><textarea id="cap-tia" rows="10">' + esc(lu.texteIA) + '</textarea><button class="pbtn" id="cap-tia-ok">Relire ce texte</button></details>'
   h += '<div class="cap-acts"><button class="pbtn cap-vert" id="cap-ok">Mettre dans la grille</button><button class="pbtn" id="cap-non">Annuler</button><button class="pbtn" id="cap-autre">Une autre image</button><span class="cap-s">Tu pourras tout retoucher avant d’enregistrer.</span></div></div></div>'
   $('cap-lit').classList.add('hide'); $('cap-res').innerHTML = h; $('cap-res').classList.remove('hide')
   if (lu.cv) capVue()
@@ -496,6 +513,8 @@ function capMaj() {
     if (g.douteuses.length) notes.push('Les cases entourées en vert sont peu nettes sur l’image : jette un œil.')
     if (lu.retouches) notes.push(lu.retouches + ' case' + (lu.retouches > 1 ? 's retouchées' : ' retouchée') + ' à la main.')
   }
+  if (lu.secours) notes.push('Le texte lu ne se découpait pas : définitions rangées par l’IA, vérifie-les.')
+  else if (typeof lu.texteIA === 'string' && !nd) notes.push('Le texte lu sur la photo ne contient pas de numéros reconnus : regarde-le ci-dessous, corrige-le puis « Relire ce texte ».')
   if (lu.defs && lu.defs.repare) notes.push('Définitions regroupées par la lecture, redécoupées par numéro (' + lu.defs.repare + ').')
   if (lu.err) notes.push('Définitions non lues : ' + lu.err + '.')
   else if (!nd && !lu.texte) notes.push('Pas de définitions trouvées.')

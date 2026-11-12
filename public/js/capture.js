@@ -22,7 +22,7 @@ export function versCanvas(im, max) {
 }
 
 // Image allégée (JPEG) pour l'envoyer à la lecture des définitions
-export function pourEnvoi(im) { return versCanvas(im, 2048).toDataURL('image/jpeg', 0.85) }
+export function pourEnvoi(im) { return versCanvas(im, 1600).toDataURL('image/jpeg', 0.85) }
 
 // ---------- Repérer la grille (lecture 4) ----------
 // Principe : on ne cherche plus les traits, on cherche les CASES BLANCHES.
@@ -583,6 +583,8 @@ export function parLignes(lu, R, C) {
 // « Horizontalement. I. … - II. … Verticalement. 1. … - 2. … », numéros romains ou arabes.
 export function lireTexte(txt) {
   let t = String(txt || '').replace(/\r/g, '')
+    .replace(/\*\*|__|`+|^\s*#+\s*|^\s*[*•]\s+/gm, ' ') // mise en forme de l'IA : gras, titres, puces
+    .replace(/(^|\s)\*(\S[^*\n]*?)\*(?=[\s.,]|$)/gm, '$1$2') // italique *…*
     .replace(/(\p{L})-\n\s*(\p{Ll})/gu, '$1$2') // mots coupés en fin de ligne
     .replace(/\s+/g, ' ').trim()
   const iH = t.search(/horizontalement/i), iV = t.search(/verticalement/i)
