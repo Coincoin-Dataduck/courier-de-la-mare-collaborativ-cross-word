@@ -1,6 +1,6 @@
 // Le Courrier de la Mare — la salle de rédaction (admin)
 import { words, mirror } from './shared.js'
-import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche, rangerLignes, parLignes, lireTexte, reparer, versRomain as romain, LECTURE } from './capture.js?v=6'
+import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche, rangerLignes, parLignes, lireTexte, reparer, versRomain as romain, LECTURE } from './capture.js?v=7'
 
 const $ = id => document.getElementById(id)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -413,6 +413,12 @@ function capAnalyser(opts) {
 }
 function defautCoins() { const w = lu.cv.width, h = lu.cv.height; return [[w * 0.25, h * 0.25], [w * 0.75, h * 0.25], [w * 0.25, h * 0.75], [w * 0.75, h * 0.75]] }
 
+// Texte lu par l'IA → définitions ; null si on n'y trouve aucun numéro
+function defsDuTexte(t) {
+  let d = lireTexte(t)
+  if (!d.h.length && !d.v.length) d = lireTexte('Horizontalement. ' + t) // titre de section non recopié
+  return d.h.length || d.v.length ? d : null
+}
 async function capLire(f) {
   $('cap-drop').classList.add('hide'); $('cap-coll').classList.add('hide'); $('cap-lit').classList.remove('hide'); $('cap-res').classList.add('hide')
   let im
@@ -425,7 +431,8 @@ async function capLire(f) {
     const r = await fetch(LAPI, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image: pourEnvoi(im) }) })
     const d = await r.json().catch(() => ({}))
     if (!r.ok) throw new Error(d.error || 'erreur ' + r.status)
-    lu.defs = reparer(d)
+    if (typeof d.texte === 'string') { lu.texteIA = d.texte; lu.defs = defsDuTexte(d.texte) }
+    else lu.defs = reparer(d)
   } catch (e) { err = e.message }
   lu.tdefs = tailleDefs(lu.defs)
   // pas de grille trouvée, mais les définitions donnent la taille : on la propose pour la pose à la main
@@ -462,6 +469,7 @@ function capMontrer(err) {
       '<label class="cap-ck"><input type="radio" name="cap-f" value="ligne"' + (pl ? ' checked' : '') + '> Un numéro par ligne et par colonne (I, II… et 1, 2…, plusieurs définitions par numéro, comme Laclos ou Le Monde)</label></div>'
     h += '<div class="cap-two">' + capCol('Horizontalement', pl ? dh.map(x => ({ ...x, n: romain(x.n) })) : dh) + capCol('Verticalement', dv) + '</div>'
   }
+  if (typeof lu.texteIA === 'string') h += '<details class="cap-coll cap-tia"' + (lu.tiaOuvert ? ' open' : '') + '><summary>Texte lu sur la photo (corrige-le si une définition manque)</summary><textarea id="cap-tia" rows="10">' + esc(lu.texteIA) + '</textarea><button class="pbtn" id="cap-tia-ok">Relire ce texte</button></details>'
   h += '<div class="cap-acts"><button class="pbtn cap-vert" id="cap-ok">Mettre dans la grille</button><button class="pbtn" id="cap-non">Annuler</button><button class="pbtn" id="cap-autre">Une autre image</button><span class="cap-s">Tu pourras tout retoucher avant d’enregistrer.</span></div></div></div>'
   $('cap-lit').classList.add('hide'); $('cap-res').innerHTML = h; $('cap-res').classList.remove('hide')
   if (lu.cv) capVue()
@@ -607,6 +615,11 @@ $('cap-res').onclick = e => {
   else if (id === 'cap-ok') capMettre()
   else if (id === 'cap-sol') capMettreSol()
   else if (id === 'cap-relire') capRelire(false)
+  else if (id === 'cap-tia-ok') {
+    const t = $('cap-tia').value, d = defsDuTexte(t)
+    if (!d) { alert('Je ne trouve ni « Horizontalement » ni « Verticalement » suivis de numéros.'); return }
+    lu.texteIA = t; lu.defs = d; lu.tdefs = tailleDefs(d); lu.tiaOuvert = true; capMontrer('')
+  }
   else if (e.target.matches('.cap-mg i[data-r]') && lu && lu.g) capBasculer(+e.target.dataset.r, +e.target.dataset.c)
 }
 $('cap-res').onkeydown = e => { if (e.key === 'Enter' && (e.target.id === 'cap-R' || e.target.id === 'cap-C')) { e.preventDefault(); capRelire(false) } }

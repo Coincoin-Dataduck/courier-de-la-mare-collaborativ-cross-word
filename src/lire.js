@@ -12,7 +12,36 @@ Réponds uniquement avec du JSON, sans aucun autre texte : {"format":"mot","h":[
 - Une entrée par numéro : ne mets JAMAIS plusieurs numéros (« - II. », « 3. ») dans le même t. Recopie TOUS les numéros jusqu'au dernier, sans t'arrêter en route.
 - Si une seule direction est visible, laisse l'autre liste vide.`
 
+// L'IA ne fait que recopier le texte (ce qu'elle fait le mieux) ; le découpage par numéro se fait
+// ensuite dans le navigateur (lireTexte de capture.js), et le texte lu reste visible et corrigeable.
+const CONSIGNE_TEXTE = `Tu recopies, mot pour mot, le texte des définitions d'une page de mots croisés français. Tu ne résous rien.
+- Recopie TOUT le texte des définitions, de « Horizontalement » jusqu'à la toute dernière définition de « Verticalement », sans rien sauter, sans rien résumer, sans rien réordonner.
+- Garde les numéros (I, II, III… ou 1, 2, 3…), les points, les tirets « - » entre numéros, la ponctuation et les majuscules exactement comme sur l'image.
+- Chaque phrase compte, même courte (« Note. », « Quoi ? », « En mouvement. ») : n'en oublie aucune, surtout en début ou en fin de ligne.
+- Recolle les mots coupés en fin de ligne par un tiret (« Divi- seur » devient « Diviseur »).
+- N'écris rien d'autre : pas de titre, pas de commentaire, pas de solutions, pas de numéros de la grille.`
+
 export async function lireDefs(env, image) {
+  let r
+  try {
+    r = await env.AI.run(MODELE, {
+      messages: [
+        { role: 'system', content: CONSIGNE_TEXTE },
+        { role: 'user', content: [{ type: 'text', text: 'Recopie le texte des définitions de cette page.' }, { type: 'image_url', image_url: { url: image } }] }
+      ],
+      max_tokens: 4000, temperature: 0
+    })
+  } catch (e) { throw new Error('la lecture a échoué (' + ((e && e.message) || e) + ')') }
+  const x = r && r.response
+  if (x && typeof x === 'object') return nettoyer(x)
+  const texte = String(x || '').replace(/^```[a-z]*\s*|```\s*$/g, '').trim()
+  if (!texte) throw new Error('rien lu sur la photo')
+  if (/^\s*\{[\s\S]*"h"\s*:/.test(texte)) return nettoyer(texte) // l'IA a répondu en JSON malgré tout
+  return { texte: texte.slice(0, 20000) }
+}
+
+// Ancienne lecture, en JSON rangé par l'IA (gardée en secours)
+export async function lireDefsJson(env, image) {
   let r
   try {
     r = await env.AI.run(MODELE, {

@@ -22,7 +22,7 @@ export function versCanvas(im, max) {
 }
 
 // Image allégée (JPEG) pour l'envoyer à la lecture des définitions
-export function pourEnvoi(im) { return versCanvas(im, 1600).toDataURL('image/jpeg', 0.85) }
+export function pourEnvoi(im) { return versCanvas(im, 2048).toDataURL('image/jpeg', 0.85) }
 
 // ---------- Repérer la grille (lecture 4) ----------
 // Principe : on ne cherche plus les traits, on cherche les CASES BLANCHES.
