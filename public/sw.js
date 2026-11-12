@@ -3,7 +3,7 @@
 // Les grilles, les lettres et le temps réel (/api/...) ne passent JAMAIS par le cache :
 // tout le monde doit voir la même grille au même moment.
 // Changer VERSION à chaque modification de ce fichier pour forcer la mise à jour.
-const VERSION = 'cdlm-v8'
+const VERSION = 'cdlm-v9'
 const COQUILLE = [
   '/horsligne.html',
   '/journal.css',

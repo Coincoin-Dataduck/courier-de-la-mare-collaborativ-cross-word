@@ -1,6 +1,6 @@
 // Le Courrier de la Mare — la salle de rédaction (admin)
 import { words, mirror } from './shared.js'
-import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche, rangerLignes, parLignes, lireTexte, reparer, versRomain as romain, LECTURE } from './capture.js?v=9'
+import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche, rangerLignes, parLignes, lireTexte, reparer, versRomain as romain, LECTURE } from './capture.js?v=10'
 
 const $ = id => document.getElementById(id)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -502,6 +502,7 @@ function capMaj() {
     titre.push(pl ? dh.length + ' lignes, ' + dv.length + ' colonnes de définitions' : nd + ' définition' + (nd > 1 ? 's' : ''))
   }
   if (lu.texte) notes.push('Les définitions iront dans la grille déjà dessinée (' + R + ' × ' + C + ').')
+  else if (!g && nd) notes.push('Pas de grille sur cette photo : les définitions iront dans la grille déjà dessinée (' + R + ' × ' + C + ').')
   else if (!g) notes.push('Pas de grille repérée' + (lu.diag && lu.diag.echec && lu.diag.echec !== 'pas de grille trouvée' ? ' (' + lu.diag.echec + ')' : '') + '. Pose les quatre ronds rouges sur les coins de la grille, vérifie la taille, puis « Relire ».')
   else {
     if (g.R !== R || g.C !== C) notes.push('La grille de l’éditeur passera en ' + g.R + ' × ' + g.C + '.')
@@ -513,11 +514,18 @@ function capMaj() {
     if (g.douteuses.length) notes.push('Les cases entourées en vert sont peu nettes sur l’image : jette un œil.')
     if (lu.retouches) notes.push(lu.retouches + ' case' + (lu.retouches > 1 ? 's retouchées' : ' retouchée') + ' à la main.')
   }
+  // définitions par ligne : on compte, ligne par ligne, définitions et mots de la grille (celle de la photo, sinon celle de l'éditeur)
+  let ecarts = []
+  if (nd && parLignes(lu.defs, g ? g.R : R, g ? g.C : C) && (g || B.includes('1'))) {
+    ecarts = rangerLignes(words(g ? { rows: g.R, cols: g.C, blacks: g.B } : meta()), lu.defs).ecarts
+    if (ecarts.length) notes.push('Il manque sans doute une définition (ou deux sont collées) : ' + ecarts.join(' ; ') + '. ' + (typeof lu.texteIA === 'string' ? 'Complète le texte lu ci-dessous, puis « Relire ce texte ».' : 'Tu pourras la compléter dans l’éditeur.'))
+  }
   if (lu.secours) notes.push('Le texte lu ne se découpait pas : définitions rangées par l’IA, vérifie-les.')
   else if (typeof lu.texteIA === 'string' && !nd) notes.push('Le texte lu sur la photo ne contient pas de numéros reconnus : regarde-le ci-dessous, corrige-le puis « Relire ce texte ».')
   if (lu.defs && lu.defs.repare) notes.push('Définitions regroupées par la lecture, redécoupées par numéro (' + lu.defs.repare + ').')
   if (lu.err) notes.push('Définitions non lues : ' + lu.err + '.')
   else if (!nd && !lu.texte) notes.push('Pas de définitions trouvées.')
+  const tia = document.querySelector('.cap-tia'); if (tia && ecarts.length) tia.open = true
   $('cap-titre').textContent = titre.join(' · ') || 'Rien trouvé sur l’image'
   $('cap-notes').textContent = notes.join(' ')
   $('cap-n').checked = !!g; $('cap-n').disabled = !g
