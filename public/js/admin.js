@@ -1,6 +1,6 @@
 // Le Courrier de la Mare — la salle de rédaction (admin)
 import { words, mirror } from './shared.js'
-import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche, rangerLignes, parLignes, lireTexte, versRomain as romain } from './capture.js'
+import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche, rangerLignes, parLignes, lireTexte, versRomain as romain, LECTURE } from './capture.js?v=4'
 
 const $ = id => document.getElementById(id)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
@@ -389,56 +389,206 @@ document.addEventListener('paste', e => {
   if (!it) return
   e.preventDefault(); capLire(it.getAsFile())
 })
+
+// Taille donnée par des définitions « par ligne et par colonne » : dernier numéro romain × dernier numéro de colonne
+function tailleDefs(d) {
+  if (!d || !(d.h || []).length || !(d.v || []).length || !parLignes(d, 40, 40)) return null
+  return { R: Math.max(...d.h.map(x => +x.n)), C: Math.max(...d.v.map(x => +x.n)) }
+}
+// Lit (ou relit) la grille sur la photo gardée dans lu.cv
+function capAnalyser(opts) {
+  const r = lireGrille(lu.cv, opts)
+  lu.diag = r.diag; lu.g = r.B ? r : null; lu.retouches = 0
+  if (lu.g) lu.coins = lu.g.coins.map(p => p.slice())
+  else if (!lu.coins) lu.coins = defautCoins()
+}
+function defautCoins() { const w = lu.cv.width, h = lu.cv.height; return [[w * 0.25, h * 0.25], [w * 0.75, h * 0.25], [w * 0.25, h * 0.75], [w * 0.75, h * 0.75]] }
+
 async function capLire(f) {
   $('cap-drop').classList.add('hide'); $('cap-coll').classList.add('hide'); $('cap-lit').classList.remove('hide'); $('cap-res').classList.add('hide')
   let im
   try { im = await chargerImage(f) } catch (e) { capReset(); alert(e.message); return }
   if (mode === 'sol') return capLireSol(im)
-  const g = lireGrille(versCanvas(im, 2400))
-  let lus = null, err = ''
+  lu = { cv: versCanvas(im, 2400), photo: im.naturalWidth + '×' + im.naturalHeight, defs: null }
+  capAnalyser({})
+  let err = ''
   try {
     const r = await fetch(LAPI, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ image: pourEnvoi(im) }) })
     const d = await r.json().catch(() => ({}))
     if (!r.ok) throw new Error(d.error || 'erreur ' + r.status)
-    lus = d
+    lu.defs = d
   } catch (e) { err = e.message }
-  lu = { g, defs: lus }
+  lu.tdefs = tailleDefs(lu.defs)
+  // pas de grille trouvée, mais les définitions donnent la taille : on la propose pour la pose à la main
+  lu.R = lu.g ? lu.g.R : lu.tdefs ? lu.tdefs.R : R
+  lu.C = lu.g ? lu.g.C : lu.tdefs ? lu.tdefs.C : C
   capMontrer(err)
 }
+
 function capMini(g) {
   const cs = Math.max(8, Math.min(18, Math.floor(300 / Math.max(g.R, g.C)))), dt = new Set(g.douteuses.map(([r, c]) => r + ',' + c))
   let h = ''
-  for (let r = 0; r < g.R; r++) for (let c = 0; c < g.C; c++) h += '<i class="' + (g.B[r * g.C + c] === '1' ? 'n' : '') + (dt.has(r + ',' + c) ? ' dt' : '') + '"></i>'
+  for (let r = 0; r < g.R; r++) for (let c = 0; c < g.C; c++) h += '<i data-r="' + r + '" data-c="' + c + '" class="' + (g.B[r * g.C + c] === '1' ? 'n' : '') + (dt.has(r + ',' + c) ? ' dt' : '') + '"></i>'
   return '<div class="cap-mg" style="--cs:' + cs + 'px;grid-template-columns:repeat(' + g.C + ',var(--cs))">' + h + '</div>'
 }
 function capCol(t, L) {
   return '<div><h5>' + t + ' · ' + L.length + '</h5>' + L.slice(0, 6).map(x => '<p><b>' + x.n + '.</b>' + esc(x.t) + '</p>').join('') + (L.length > 6 ? '<p style="color:var(--grey)">… ' + (L.length - 6) + ' autres</p>' : '') + '</div>'
 }
 function capMontrer(err) {
-  const g = lu.g, dh = (lu.defs && lu.defs.h) || [], dv = (lu.defs && lu.defs.v) || [], nd = dh.length + dv.length
-  const titre = [], notes = []
-  if (g) titre.push(g.R + ' × ' + g.C, g.nb + ' case' + (g.nb > 1 ? 's noires' : ' noire'))
-  const pl = nd && parLignes(lu.defs, g ? g.R : R, g ? g.C : C)
-  if (nd) titre.push(pl ? dh.length + ' lignes, ' + dv.length + ' colonnes de définitions' : nd + ' définition' + (nd > 1 ? 's' : ''))
-  if (lu.texte) notes.push('Les définitions iront dans la grille déjà dessinée (' + R + ' × ' + C + ').')
-  else if (!g) notes.push('Pas de grille repérée sur l’image.')
-  else {
-    if (g.R !== R || g.C !== C) notes.push('La grille de l’éditeur passera en ' + g.R + ' × ' + g.C + '.')
-    if (g.douteuses.length) notes.push('Les cases entourées en vert sont peu nettes sur l’image : jette un œil.')
+  const dh = (lu.defs && lu.defs.h) || [], dv = (lu.defs && lu.defs.v) || [], nd = dh.length + dv.length
+  const pl = nd && parLignes(lu.defs, lu.g ? lu.g.R : R, lu.g ? lu.g.C : C)
+  lu.err = err
+  let h = '<div class="cap-cols">'
+  if (lu.cv) {
+    h += '<div class="cap-g"><canvas id="cap-cv" class="cap-cv"></canvas>' +
+      '<p class="cap-aide">Touche une case pour la noircir ou la blanchir. Si la grille est mal posée, fais glisser les ronds rouges sur ses quatre coins.</p>' +
+      '<div class="cap-taille">Taille <input type="number" id="cap-R" min="3" max="40" value="' + lu.R + '"> × <input type="number" id="cap-C" min="3" max="40" value="' + lu.C + '"><button class="pbtn" id="cap-relire">Relire</button></div>' +
+      '<div id="cap-mini"></div><p class="cap-diag" id="cap-diag"></p></div>'
   }
-  if (err) notes.push('Définitions non lues : ' + err + '.')
-  else if (!nd) notes.push('Pas de définitions trouvées.')
-  let h = '<div class="cap-cols">' + (g ? '<div>' + capMini(g) + '</div>' : '') + '<div class="cap-r"><h4>' + esc(titre.join(' · ') || 'Rien trouvé sur l’image') + '</h4>'
-  h += '<p class="cap-s">' + esc(notes.join(' ')) + '</p>'
-  h += '<label class="cap-ck"><input type="checkbox" id="cap-n"' + (g ? ' checked' : ' disabled') + '> Placer les cases noires</label>'
+  h += '<div class="cap-r"><h4 id="cap-titre"></h4><p class="cap-s" id="cap-notes"></p>'
+  h += '<label class="cap-ck"><input type="checkbox" id="cap-n"> Placer les cases noires</label>'
   h += '<label class="cap-ck"><input type="checkbox" id="cap-d"' + (nd ? ' checked' : ' disabled') + '> Remplir les définitions</label>'
   if (nd) {
     h += '<div class="cap-fmt"><label class="cap-ck"><input type="radio" name="cap-f" value="mot"' + (pl ? '' : ' checked') + '> Un numéro par mot (1, 2, 3… dans les cases)</label>' +
       '<label class="cap-ck"><input type="radio" name="cap-f" value="ligne"' + (pl ? ' checked' : '') + '> Un numéro par ligne et par colonne (I, II… et 1, 2…, plusieurs définitions par numéro, comme Laclos ou Le Monde)</label></div>'
+    h += '<div class="cap-two">' + capCol('Horizontalement', pl ? dh.map(x => ({ ...x, n: romain(x.n) })) : dh) + capCol('Verticalement', dv) + '</div>'
   }
-  if (nd) h += '<div class="cap-two">' + capCol('Horizontalement', pl ? dh.map(x => ({ ...x, n: romain(x.n) })) : dh) + capCol('Verticalement', dv) + '</div>'
-  h += '<div class="cap-acts"><button class="pbtn cap-vert" id="cap-ok"' + (g || nd ? '' : ' disabled') + '>Mettre dans la grille</button><button class="pbtn" id="cap-non">Annuler</button><button class="pbtn" id="cap-autre">Une autre image</button><span class="cap-s">Tu pourras tout retoucher avant d’enregistrer.</span></div></div></div>'
+  h += '<div class="cap-acts"><button class="pbtn cap-vert" id="cap-ok">Mettre dans la grille</button><button class="pbtn" id="cap-non">Annuler</button><button class="pbtn" id="cap-autre">Une autre image</button><span class="cap-s">Tu pourras tout retoucher avant d’enregistrer.</span></div></div></div>'
   $('cap-lit').classList.add('hide'); $('cap-res').innerHTML = h; $('cap-res').classList.remove('hide')
+  if (lu.cv) capVue()
+  capMaj()
+}
+// Met à jour ce qui dépend de la grille lue : titre, remarques, photo annotée, petite grille, diagnostic
+function capMaj() {
+  const g = lu.g, nd = ((lu.defs && lu.defs.h) || []).length + ((lu.defs && lu.defs.v) || []).length
+  const titre = [], notes = []
+  if (g) titre.push(g.R + ' × ' + g.C, g.nb + ' case' + (g.nb > 1 ? 's noires' : ' noire'))
+  if (nd) {
+    const pl = parLignes(lu.defs, g ? g.R : R, g ? g.C : C), dh = lu.defs.h || [], dv = lu.defs.v || []
+    titre.push(pl ? dh.length + ' lignes, ' + dv.length + ' colonnes de définitions' : nd + ' définition' + (nd > 1 ? 's' : ''))
+  }
+  if (lu.texte) notes.push('Les définitions iront dans la grille déjà dessinée (' + R + ' × ' + C + ').')
+  else if (!g) notes.push('Pas de grille repérée' + (lu.diag && lu.diag.echec && lu.diag.echec !== 'pas de grille trouvée' ? ' (' + lu.diag.echec + ')' : '') + '. Pose les quatre ronds rouges sur les coins de la grille, vérifie la taille, puis « Relire ».')
+  else {
+    if (g.R !== R || g.C !== C) notes.push('La grille de l’éditeur passera en ' + g.R + ' × ' + g.C + '.')
+    if (lu.diag.ecart) notes.push('Attention : ' + lu.diag.ecart + '.')
+    if (lu.tdefs) {
+      if (lu.tdefs.R === g.R && lu.tdefs.C === g.C) notes.push('Taille confirmée par les définitions (' + romain(g.R) + ' lignes, ' + g.C + ' colonnes).')
+      else notes.push('Les définitions vont jusqu’à ' + romain(lu.tdefs.R) + ' et ' + lu.tdefs.C + ', soit ' + lu.tdefs.R + ' × ' + lu.tdefs.C + ' : vérifie la taille (il manque peut-être un numéro dans la lecture des définitions).')
+    }
+    if (g.douteuses.length) notes.push('Les cases entourées en vert sont peu nettes sur l’image : jette un œil.')
+    if (lu.retouches) notes.push(lu.retouches + ' case' + (lu.retouches > 1 ? 's retouchées' : ' retouchée') + ' à la main.')
+  }
+  if (lu.err) notes.push('Définitions non lues : ' + lu.err + '.')
+  else if (!nd && !lu.texte) notes.push('Pas de définitions trouvées.')
+  $('cap-titre').textContent = titre.join(' · ') || 'Rien trouvé sur l’image'
+  $('cap-notes').textContent = notes.join(' ')
+  $('cap-n').checked = !!g; $('cap-n').disabled = !g
+  $('cap-ok').disabled = !(g || nd)
+  if (!lu.cv) return
+  $('cap-mini').innerHTML = g ? capMini(g) : ''
+  const d = lu.diag || {}
+  $('cap-diag').textContent = ['lecture ' + LECTURE, 'photo ' + lu.photo, d.image && d.image !== lu.photo ? 'réduite à ' + d.image : '', 'analysée en ' + d.travail,
+    d.cases ? d.cases + ' cases blanches repérées' : '', d.trouve && g && d.trouve !== g.R + '×' + g.C ? 'quadrillage trouvé ' + d.trouve : '', d.coins === 'à la main' ? 'coins posés à la main' : ''].filter(Boolean).join(' · ')
+  capDessiner()
+}
+
+// ---- la photo annotée : maillage, cases noires, coins déplaçables ----
+let capDrag = null, capTap = null
+function capVue() {
+  // cadrage : la grille et une marge, ou toute la photo si rien n'a été trouvé
+  const w = lu.cv.width, h = lu.cv.height
+  if (lu.g) {
+    const b = lu.g.box, mx = (b.x1 - b.x0) * 0.12, my = (b.y1 - b.y0) * 0.12
+    lu.vue = { x0: Math.max(0, b.x0 - mx), y0: Math.max(0, b.y0 - my), x1: Math.min(w, b.x1 + mx), y1: Math.min(h, b.y1 + my) }
+  } else lu.vue = { x0: 0, y0: 0, x1: w, y1: h }
+  const cv = $('cap-cv'), larg = Math.min(560, cv.parentElement.clientWidth || 320), dpr = window.devicePixelRatio || 1
+  const v = lu.vue, k = larg / (v.x1 - v.x0)
+  cv.style.width = larg + 'px'; cv.style.height = Math.round((v.y1 - v.y0) * k) + 'px'
+  cv.width = Math.round(larg * dpr); cv.height = Math.round((v.y1 - v.y0) * k * dpr)
+  lu.k = k
+  cv.onpointerdown = capDown; cv.onpointermove = capMove; cv.onpointerup = capUp; cv.onpointercancel = () => { capDrag = null; capTap = null }
+}
+const capEcran = p => [(p[0] - lu.vue.x0) * lu.k, (p[1] - lu.vue.y0) * lu.k] // pixels de la photo -> pixels CSS du canvas
+const capPhoto = p => [p[0] / lu.k + lu.vue.x0, p[1] / lu.k + lu.vue.y0]
+function capDessiner(sansMaille) {
+  const cv = $('cap-cv'); if (!cv) return
+  const x = cv.getContext('2d'), dpr = cv.width / parseFloat(cv.style.width), v = lu.vue
+  x.setTransform(1, 0, 0, 1, 0, 0)
+  x.drawImage(lu.cv, v.x0, v.y0, v.x1 - v.x0, v.y1 - v.y0, 0, 0, cv.width, cv.height)
+  x.setTransform(dpr, 0, 0, dpr, 0, 0)
+  const g = lu.g
+  if (g && !sansMaille) {
+    const M = g.maille.map(row => row.map(capEcran))
+    const quad = (r, c) => { x.beginPath(); x.moveTo(...M[r][c]); x.lineTo(...M[r][c + 1]); x.lineTo(...M[r + 1][c + 1]); x.lineTo(...M[r + 1][c]); x.closePath() }
+    x.fillStyle = 'rgba(196,26,18,.42)'
+    for (let r = 0; r < g.R; r++) for (let c = 0; c < g.C; c++) if (g.B[r * g.C + c] === '1') { quad(r, c); x.fill() }
+    x.strokeStyle = '#1f8a4c'; x.lineWidth = 2.5
+    for (const [r, c] of g.douteuses) { quad(r, c); x.stroke() }
+    x.strokeStyle = 'rgba(196,26,18,.9)'; x.lineWidth = 1.2
+    x.beginPath()
+    for (let k = 0; k <= g.R; k++) { x.moveTo(...M[k][0]); for (let l = 1; l <= g.C; l++) x.lineTo(...M[k][l]) }
+    for (let l = 0; l <= g.C; l++) { x.moveTo(...M[0][l]); for (let k = 1; k <= g.R; k++) x.lineTo(...M[k][l]) }
+    x.stroke()
+  }
+  // le cadre entre les coins, et les coins
+  const P = lu.coins.map(capEcran)
+  if (!g || sansMaille) { x.strokeStyle = 'rgba(196,26,18,.9)'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(...P[0]); x.lineTo(...P[1]); x.lineTo(...P[3]); x.lineTo(...P[2]); x.closePath(); x.stroke() }
+  for (const p of P) { x.beginPath(); x.arc(p[0], p[1], 11, 0, 7); x.fillStyle = 'rgba(255,255,255,.55)'; x.fill(); x.lineWidth = 2.5; x.strokeStyle = '#c41a12'; x.stroke() }
+}
+function capPos(e) { const r = $('cap-cv').getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top] }
+function capDown(e) {
+  const p = capPos(e), P = lu.coins.map(capEcran)
+  let i = -1, dm = 26
+  P.forEach((q, j) => { const d = Math.hypot(q[0] - p[0], q[1] - p[1]); if (d < dm) { dm = d; i = j } })
+  if (i >= 0) { capDrag = { i, d: [P[i][0] - p[0], P[i][1] - p[1]] }; $('cap-cv').setPointerCapture(e.pointerId); e.preventDefault() }
+  else capTap = p
+}
+function capMove(e) {
+  if (!capDrag) return
+  e.preventDefault()
+  const p = capPos(e)
+  lu.coins[capDrag.i] = capPhoto([p[0] + capDrag.d[0], p[1] + capDrag.d[1]])
+  capDessiner(true)
+}
+function capUp(e) {
+  if (capDrag) { capDrag = null; capRelire(true); return }
+  if (!capTap || !lu.g) return
+  const p = capPos(e), t = capTap; capTap = null
+  if (Math.hypot(p[0] - t[0], p[1] - t[1]) > 8) return
+  // la case sous le doigt : celle dont le quadrilatère contient le point
+  const g = lu.g, q = capPhoto(p)
+  for (let r = 0; r < g.R; r++) for (let c = 0; c < g.C; c++) {
+    const M = g.maille
+    if (dansQuad(q, M[r][c], M[r][c + 1], M[r + 1][c + 1], M[r + 1][c])) return capBasculer(r, c)
+  }
+}
+function dansQuad(p, ...Q) {
+  let s = 0
+  for (let i = 0; i < 4; i++) { const a = Q[i], b = Q[(i + 1) % 4], z = (b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0]); if (z !== 0) { if (s && Math.sign(z) !== s) return false; s = Math.sign(z) } }
+  return true
+}
+function capBasculer(r, c) {
+  const g = lu.g, i = r * g.C + c, noire = g.B[i] !== '1'
+  g.B = g.B.slice(0, i) + (noire ? '1' : '0') + g.B.slice(i + 1)
+  g.nb += noire ? 1 : -1
+  g.douteuses = g.douteuses.filter(([a, b]) => a !== r || b !== c)
+  lu.retouches = (lu.retouches || 0) + 1
+  capMaj()
+}
+// Relit avec la taille des cases du formulaire, et les coins posés à la main si on les a bougés
+function capRelire(coinsMain) {
+  const nR = +$('cap-R').value, nC = +$('cap-C').value
+  if (!(nR >= 3 && nR <= 40 && nC >= 3 && nC <= 40)) { alert('La taille va de 3 à 40.'); return }
+  if (coinsMain) lu.main = true
+  lu.R = nR; lu.C = nC
+  $('cap-diag').textContent = 'Je relis…'
+  setTimeout(() => {
+    const avant = lu.g
+    capAnalyser(lu.main ? { R: nR, C: nC, coins: lu.coins } : { R: nR, C: nC })
+    if (lu.g && !avant) capVue() // première grille trouvée : on recadre dessus
+    capMaj()
+  }, 20)
 }
 $('cap-res').onclick = e => {
   const id = e.target.id
@@ -446,7 +596,10 @@ $('cap-res').onclick = e => {
   else if (id === 'cap-autre') capReset()
   else if (id === 'cap-ok') capMettre()
   else if (id === 'cap-sol') capMettreSol()
+  else if (id === 'cap-relire') capRelire(false)
+  else if (e.target.matches('.cap-mg i[data-r]') && lu && lu.g) capBasculer(+e.target.dataset.r, +e.target.dataset.c)
 }
+$('cap-res').onkeydown = e => { if (e.key === 'Enter' && (e.target.id === 'cap-R' || e.target.id === 'cap-C')) { e.preventDefault(); capRelire(false) } }
 function capMettre() {
   const n = $('cap-n').checked && lu.g, d = $('cap-d').checked && lu.defs
   if (!n && !d) return
@@ -472,9 +625,14 @@ function capErreur(t) {
   $('cap-res').classList.remove('hide')
 }
 async function capLireSol(im) {
-  const cv = versCanvas(im, 2400), g = lireGrille(cv)
-  if (!g) return capErreur('Pas de grille repérée sur l’image.')
-  const k = caler(g, R, C, B)
+  const cv = versCanvas(im, 2400)
+  let g = lireGrille(cv)
+  if (!g.B) return capErreur('Pas de grille repérée sur l’image (' + g.diag.echec + ').')
+  let k = caler(g, R, C, B)
+  if (!k || k.score < 0.9) { // la photo montre peut-être toute la grille, mais le quadrillage s'est trompé de taille
+    const g2 = lireGrille(cv, { R, C }), k2 = g2.B && caler(g2, R, C, B)
+    if (k2 && (!k || k2.score > k.score)) { g = g2; k = k2 }
+  }
   if (!k || k.score < 0.9) return capErreur('Les cases noires de la capture (' + g.R + ' × ' + g.C + ') ne correspondent pas à cette grille (' + R + ' × ' + C + '). Vérifie que c’est bien la solution de la grille n° ' + (cur ? cur.numero : '') + '.')
   // l'IA ne voit que des mots isolés, horizontaux puis verticaux, par planches de 18
   const lots = []

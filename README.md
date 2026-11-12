@@ -74,3 +74,12 @@ Grids and letters live in Cloudflare storage (Durable Objects), not in the code.
 - Answers are not checked (nobody knows them).
 - Anyone with a grid link can play. Links are long enough not to be guessed.
 - Without accounts, anyone can claim an existing name on a grid. Fine among friends.
+
+## Reading a photo of a grid (admin, "Lire une capture…")
+
+Detection runs in the browser (`public/js/capture.js`, "lecture 4"). It looks for the white cells, not the lines: every closed white blob of roughly the same size is a candidate cell, and cells are linked step by step to their neighbours, so the lattice may curve with the page of a paperback book. Text around the grid does not form a lattice and is ignored. All settings are measured in cell sizes, so small and large photos behave the same.
+
+- The preview shows the photo with the detected mesh (red), black cells (filled) and doubtful cells (green). Tap a cell to toggle it. Drag the four red corners if the grid is badly placed: the mesh is rebuilt between them and snaps to the crossings that were found.
+- Size: found on the photo. With row/column clues (Michel Laclos, Le Monde: I, II… and 1, 2…), the last numbers give the size too; the preview says whether both agree. The size can be typed in and re-read ("Relire").
+- The small grey line under the preview (version, photo size, analysed size, number of white cells found) is there for debugging.
+

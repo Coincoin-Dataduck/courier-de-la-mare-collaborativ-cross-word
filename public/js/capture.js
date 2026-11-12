@@ -24,66 +24,131 @@ export function versCanvas(im, max) {
 // Image allégée (JPEG) pour l'envoyer à la lecture des définitions
 export function pourEnvoi(im) { return versCanvas(im, 1600).toDataURL('image/jpeg', 0.85) }
 
-// Les traits de la grille : lignes (ou colonnes) où le noir court sans interruption sur une grande longueur.
-// Une grille a des traits régulièrement espacés : on garde la plus longue suite à pas constant.
-function traits(run, n) {
-  // les traits d'une même grille ont tous à peu près la même longueur : on essaie chaque longueur présente
-  const vals = [...new Set(Array.from(run).filter(v => v >= 40).map(v => Math.round(v / 4) * 4))].sort((a, b) => b - a).slice(0, 80)
-  let best = null
-  for (const v of vals) {
-    const cl = []
-    for (let i = 0; i < n; i++) {
-      if (run[i] < v * 0.85 || run[i] > v * 1.3) continue
-      const d = cl[cl.length - 1]
-      if (d && i - d.b <= 1) d.b = i; else cl.push({ a: i, b: i })
-    }
-    const c = cl.map(x => (x.a + x.b) / 2)
-    for (let s = 0; s < c.length - 1; s++) {
-      const pas = c[s + 1] - c[s]; if (pas < 6) continue
-      let e = s + 1
-      while (e + 1 < c.length && Math.abs(c[e + 1] - c[e] - pas) <= Math.max(2, pas * 0.2)) e++
-      if (e - s >= 3 && (!best || e - s > best.c.length - 1)) best = { c: c.slice(s, e + 1) }
-    }
-  }
-  return best ? best.c : null
+// ---------- Repérer la grille (lecture 4) ----------
+// Principe : on ne cherche plus les traits, on cherche les CASES BLANCHES.
+// 1. L'image est binarisée (noir = plus sombre que le papier autour), à une taille de travail fixe.
+// 2. Chaque tache blanche fermée est une case possible. Les cases d'une grille ont toutes à peu près
+//    la même aire, et chacune a ses voisines à un pas régulier dans deux directions.
+// 3. On parcourt ce quadrillage de proche en proche (il peut se courber : chaque case prend ses propres
+//    directions sur ses voisines). Chaque case reçoit son numéro de ligne et de colonne.
+//    Le texte autour (lettres, chiffres, titre) ne forme pas de quadrillage : il reste dehors.
+// 4. Les coins de chaque case donnent les croisements des traits ; ceux cachés par des cases noires sont
+//    complétés par leurs voisins. Une case est noire si son cœur est bien plus sombre que ses voisines.
+// Tout est mesuré en « tailles de case » : une petite image ou une grande donnent le même calcul.
+// Si la taille est imposée (définitions Laclos, saisie) et diffère, ou si les coins sont posés à la main,
+// le maillage est tendu entre les coins et s'accroche aux croisements trouvés.
+export const LECTURE = 4
+const TRAVAIL = 1400 // côté max de l'image analysée
+
+export function lireGrille(cv, opts) {
+  return analyser(cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, cv.width, cv.height), opts)
 }
 
-// Repère la grille dans un canvas. Renvoie { R, C, B, douteuses, nb, cell(r, c), box } ou null.
-// Deux méthodes : traits droits (capture d'écran, journal à plat), puis traits courbes (photo d'un livre bombé).
-// On garde celle qui trouve la plus grande grille.
-export function lireGrille(cv) {
-  const w = cv.width, h = cv.height, d = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data
-  // luminosité, puis « noir » par rapport au papier voisin : une photo a des zones d'ombre
-  const lum = new Float32Array(w * h)
-  for (let i = 0, j = 0; i < w * h; i++, j += 4) lum[i] = d[j] * 0.299 + d[j + 1] * 0.587 + d[j + 2] * 0.114
-  const moy = moyenneLocale(lum, w, h, Math.max(8, Math.round(Math.max(w, h) / 25)))
+// img = { width, height, data } (ImageData). opts = { R, C, coins: [hg, hd, bg, bd] en pixels de img }
+export function analyser(img, opts = {}) {
+  const W0 = img.width, H0 = img.height
+  const s = Math.min(1, TRAVAIL / Math.max(W0, H0)), w = Math.max(1, Math.round(W0 * s)), h = Math.max(1, Math.round(H0 * s))
+  const diag = { lecture: LECTURE, image: W0 + '×' + H0, travail: w + '×' + h }
+  const lum = reduire(luminance(img), W0, H0, w, h)
+  // noir : nettement plus sombre que la moyenne autour (ombre de la page), ou franchement noir
+  const moy = moyenneLocale(lum, w, h, Math.max(6, Math.round(Math.max(w, h) / 40)))
+  const papier = quantile(lum, 0.9)
   const noir = new Uint8Array(w * h)
-  for (let i = 0; i < w * h; i++) noir[i] = lum[i] < 90 || lum[i] < moy[i] * 0.75 ? 1 : 0
-  const a = droite(noir, w, h), b = courbe(noir, w, h)
-  const g = b && (!a || b.R * b.C >= a.R * a.C) ? b : a
-  if (!g) return null
-  const { R, C, cell } = g
-  // luminosité moyenne du centre de chaque case
-  const m = []
-  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
-    const { x0, x1, y0, y1 } = cell(r, c)
-    const mx = (x1 - x0) * 0.22, my = (y1 - y0) * 0.22
-    let n = 0, t = 0
-    for (let y = Math.max(0, Math.round(y0 + my)); y <= Math.min(h - 1, Math.round(y1 - my)); y++) for (let x = Math.max(0, Math.round(x0 + mx)); x <= Math.min(w - 1, Math.round(x1 - mx)); x++) { t++; n += lum[y * w + x] }
-    m.push(t ? n / t : 255)
+  for (let i = 0; i < w * h; i++) noir[i] = lum[i] < moy[i] * 0.85 || lum[i] < papier * 0.35 ? 1 : 0
+  // traits fins et pâles (petite image, trait d'un pixel adouci) : un pixel nettement plus sombre que ses
+  // voisins des deux côtés, à 2 ou 3 pixels, est sur un trait (mesuré sur l'image adoucie, pour le grain)
+  const dx = adoucir(lum, w, h)
+  for (let y = 3; y < h - 3; y++) for (let x = 3; x < w - 3; x++) {
+    const i = y * w + x, v = dx[i]
+    for (const k of [2, 3]) {
+      if (v < 0.93 * Math.min(dx[i - k * w], dx[i + k * w]) || v < 0.93 * Math.min(dx[i - k], dx[i + k])) { noir[i] = 1; break }
+    }
   }
-  // une case est noire si elle est bien plus sombre que les cases blanches autour d'elle (ombre de la page)
-  let B = '', douteuses = [], nb = 0
+  if (opts.debug) Object.assign(opts.debug, { noir, w, h })
+
+  // --- le quadrillage des cases blanches ---
+  const q = quadrillage(noir, w, h)
+  if (q) { diag.cases = q.n; diag.trouve = q.R + '×' + q.C; if (q.conflits) diag.conflits = q.conflits }
+  let R, C, N // N[k][l] = croisement du trait horizontal k et du trait vertical l, en pixels de travail
+  if (opts.coins || (opts.R && opts.C && q && (opts.R !== q.R || opts.C !== q.C))) {
+    R = opts.R || (q && q.R); C = opts.C || (q && q.C)
+    if (!R || !C) { diag.echec = 'taille inconnue : indique le nombre de lignes et de colonnes'; return { echec: diag.echec, diag } }
+    const coins = opts.coins ? opts.coins.map(([x, y]) => [x * s, y * s]) : [q.N[0][0], q.N[0][q.C], q.N[q.R][0], q.N[q.R][q.C]]
+    if (q && opts.R && opts.C && !opts.coins && (opts.R !== q.R || opts.C !== q.C)) diag.ecart = 'la photo ressemble plutôt à ' + q.R + ' × ' + q.C
+    const T = tendre(coins, R, C, q)
+    N = ajuster(T, noir, w, h, T.fige)
+    diag.taille = opts.R ? 'donnée' : 'trouvée'; diag.coins = opts.coins ? 'à la main' : 'trouvés'
+  } else if (q) {
+    R = q.R; C = q.C; N = q.N
+    diag.taille = opts.R ? 'donnée, confirmée' : 'trouvée'; diag.coins = 'trouvés'
+  } else { diag.echec = 'pas de grille trouvée'; return { echec: diag.echec, diag } }
+  if (R < 3 || C < 3 || R > 40 || C > 40) { diag.echec = 'taille improbable (' + R + ' × ' + C + ')'; return { echec: diag.echec, diag } }
+
+  // --- cases noires : luminosité du cœur de chaque case, comparée aux cases voisines ---
+  const m = []
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) m.push(coeur(lum, w, h, N[r][c], N[r][c + 1], N[r + 1][c], N[r + 1][c + 1]))
+  const blancG = quantile(Float32Array.from(m), 0.8)
+  let B = '', nb = 0
+  const douteuses = []
   for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
     const v = []
     for (let i = Math.max(0, r - 2); i <= Math.min(R - 1, r + 2); i++) for (let j = Math.max(0, c - 2); j <= Math.min(C - 1, c + 2); j++) v.push(m[i * C + j])
     v.sort((a, b) => b - a)
-    const blanc = v[Math.floor(v.length * 0.25)] || 255, f = m[r * C + c] / blanc
+    const blanc = Math.max(v[Math.floor(v.length * 0.25)] || 255, blancG * 0.6), f = m[r * C + c] / blanc
     const est = f < 0.55
     B += est ? '1' : '0'; if (est) nb++
     if (f > 0.4 && f < 0.7) douteuses.push([r, c])
   }
-  return { R, C, B, douteuses, nb, cell, box: g.box }
+
+  // --- retour en coordonnées de l'image d'origine ---
+  const maille = N.map(row => row.map(([x, y]) => [x / s, y / s]))
+  const cell = (r, c) => {
+    const a = maille[r][c], b = maille[r][c + 1], d = maille[r + 1][c], e = maille[r + 1][c + 1]
+    return { x0: (a[0] + d[0]) / 2, x1: (b[0] + e[0]) / 2, y0: (a[1] + b[1]) / 2, y1: (d[1] + e[1]) / 2 }
+  }
+  const tous = maille.flat()
+  const box = { x0: Math.min(...tous.map(p => p[0])), x1: Math.max(...tous.map(p => p[0])), y0: Math.min(...tous.map(p => p[1])), y1: Math.max(...tous.map(p => p[1])) }
+  return { R, C, B, douteuses, nb, cell, box, maille, coins: [maille[0][0], maille[0][C], maille[R][0], maille[R][C]], diag }
+}
+
+// ---------- outils d'image ----------
+function luminance(img) {
+  const d = img.data, n = img.width * img.height, l = new Float32Array(n)
+  for (let i = 0, j = 0; i < n; i++, j += 4) l[i] = d[j] * 0.299 + d[j + 1] * 0.587 + d[j + 2] * 0.114
+  return l
+}
+
+// réduction par moyenne de zones (un trait fin reste visible, en gris, au lieu de disparaître)
+function reduire(l, W, H, w, h) {
+  if (w === W && h === H) return l
+  const o = new Float32Array(w * h), fx = W / w, fy = H / h
+  for (let y = 0; y < h; y++) {
+    const ya = Math.floor(y * fy), yb = Math.max(ya + 1, Math.floor((y + 1) * fy))
+    for (let x = 0; x < w; x++) {
+      const xa = Math.floor(x * fx), xb = Math.max(xa + 1, Math.floor((x + 1) * fx))
+      let t = 0
+      for (let yy = ya; yy < yb; yy++) for (let xx = xa; xx < xb; xx++) t += l[yy * W + xx]
+      o[y * w + x] = t / ((yb - ya) * (xb - xa))
+    }
+  }
+  return o
+}
+
+function quantile(a, q) {
+  const n = a.length, pas = Math.max(1, Math.floor(n / 20000)), v = []
+  for (let i = 0; i < n; i += pas) v.push(a[i])
+  v.sort((x, y) => x - y)
+  return v[Math.min(v.length - 1, Math.floor(v.length * q))] || 0
+}
+
+// flou 3 × 3
+function adoucir(l, w, h) {
+  const o = new Float32Array(w * h)
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x
+    o[i] = (l[i - w - 1] + l[i - w] + l[i - w + 1] + l[i - 1] + l[i] + l[i + 1] + l[i + w - 1] + l[i + w] + l[i + w + 1]) / 9
+  }
+  return o
 }
 
 // Moyenne de la luminosité dans un carré de côté 2k+1 autour de chaque pixel (image intégrale)
@@ -101,122 +166,288 @@ function moyenneLocale(lum, w, h, k) {
   return o
 }
 
-// Traits droits sur toute la largeur de l'image
-function droite(noir, w, h) {
-  const runR = new Int32Array(h), runC = new Int32Array(w)
-  for (let y = 0; y < h; y++) { let r = 0, m = 0; for (let x = 0; x < w; x++) { r = noir[y * w + x] ? r + 1 : 0; if (r > m) m = r } runR[y] = m }
-  for (let x = 0; x < w; x++) { let r = 0, m = 0; for (let y = 0; y < h; y++) { r = noir[y * w + x] ? r + 1 : 0; if (r > m) m = r } runC[x] = m }
-  const ys = traits(runR, h), xs = traits(runC, w)
-  if (!ys || !xs) return null
-  const R = ys.length - 1, C = xs.length - 1
-  if (R < 3 || C < 3 || R > 40 || C > 40) return null
-  return { R, C, cell: (r, c) => ({ x0: xs[c], x1: xs[c + 1], y0: ys[r], y1: ys[r + 1] }), box: { x0: xs[0], x1: xs[C], y0: ys[0], y1: ys[R] } }
-}
-
-// Traits courbes : on coupe l'image en bandes étroites, où chaque trait est presque droit,
-// puis on relie les morceaux d'une bande à l'autre (le trait suit la page, même là où elle plie fort).
-function courbe(noir, w, h) {
-  const e = Math.max(2, Math.round(Math.max(w, h) / 500)) // épaississement : le trait penche un peu dans la bande
-  const hz = familles(noir, w, h, e, true), vt = familles(noir, w, h, e, false)
-  if (!hz || !vt) return null
-  const R = hz.length - 1, C = vt.length - 1
-  if (R < 3 || C < 3 || R > 40 || C > 40) return null
-  const Y = (i, x) => hz[i](x), X = (i, y) => vt[i](y)
-  const cell = (r, c) => {
-    let x = (X(c, h / 2) + X(c + 1, h / 2)) / 2, y = 0
-    for (let k = 0; k < 4; k++) { y = (Y(r, x) + Y(r + 1, x)) / 2; x = (X(c, y) + X(c + 1, y)) / 2 }
-    return { x0: X(c, y), x1: X(c + 1, y), y0: Y(r, x), y1: Y(r + 1, x) }
+// luminosité moyenne du cœur d'une case (quadrilatère a b / d e), échantillonnée entre 30 et 70 %
+function coeur(lum, w, h, a, b, d, e) {
+  let t = 0, n = 0
+  for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) {
+    const u = 0.3 + 0.1 * j, v = 0.3 + 0.1 * i
+    const x = (1 - v) * ((1 - u) * a[0] + u * b[0]) + v * ((1 - u) * d[0] + u * e[0])
+    const y = (1 - v) * ((1 - u) * a[1] + u * b[1]) + v * ((1 - u) * d[1] + u * e[1])
+    const xi = Math.round(x), yi = Math.round(y)
+    if (xi < 0 || yi < 0 || xi >= w || yi >= h) continue
+    t += lum[yi * w + xi]; n++
   }
-  const coins = [cell(0, 0), cell(0, C - 1), cell(R - 1, 0), cell(R - 1, C - 1)]
-  const box = { x0: Math.min(coins[0].x0, coins[2].x0), x1: Math.max(coins[1].x1, coins[3].x1), y0: Math.min(coins[0].y0, coins[1].y0), y1: Math.max(coins[2].y1, coins[3].y1) }
-  return { R, C, cell, box }
+  return n ? t / n : 255
 }
 
-// Les traits d'une direction : pour chaque trait, une fonction position(x) (y(x) pour les horizontaux, x(y) pour les verticaux)
-function familles(noir, w, h, e, horiz) {
-  const L = horiz ? w : h, P = horiz ? h : w, NB = 16
-  const bandes = []
-  for (let s = 0; s < NB; s++) {
-    const a = Math.round(L * (0.03 + 0.94 * s / NB)), b = Math.round(L * (0.03 + 0.94 * (s + 1) / NB))
-    // pour chaque position p (ligne de pixels), part de la bande couverte par du noir à ± e près
-    const prof = new Float32Array(P)
-    for (let q = a; q < b; q++) {
-      let cnt = 0 // fenêtre glissante de 2e+1 pixels le long de p
-      for (let p = 0; p < P + e; p++) {
-        if (p < P) cnt += horiz ? noir[p * w + q] : noir[q * w + p]
-        if (p - 2 * e - 1 >= 0) cnt -= horiz ? noir[(p - 2 * e - 1) * w + q] : noir[q * w + p - 2 * e - 1]
-        const m = p - e; if (m >= 0 && m < P && cnt) prof[m]++
-      }
-    }
-    const cl = []
-    for (let p = 0; p < P; p++) if (prof[p] >= (b - a) * 0.95) { const d = cl[cl.length - 1]; if (d && p - d.b <= 2) d.b = p; else cl.push({ a: p, b: p }) }
-    const pos = reguliers(cl.map(x => (x.a + x.b) / 2))
-    if (pos.length >= 5) bandes.push({ m: (a + b) / 2, pos })
-  }
-  if (!bandes.length) return null
-  // le nombre de traits le plus fréquent d'une bande à l'autre
-  const freq = {}; for (const x of bandes) freq[x.pos.length] = (freq[x.pos.length] || 0) + 1
-  const n = +Object.keys(freq).sort((a, b) => freq[b] - freq[a] || b - a)[0]
-  const ok = bandes.filter(x => x.pos.length === n)
-  if (ok.length < 2) return null
-  // on part de la bande complète la plus centrale, puis on suit chaque trait pas à pas
-  // vers les deux bords : il épouse la page même là où elle plie fort
-  const mil = ok.reduce((best, x) => Math.abs(x.m - L / 2) < Math.abs(best.m - L / 2) ? x : best)
-  const pas = (mil.pos[n - 1] - mil.pos[0]) / (n - 1)
-  return mil.pos.map(p0 => tracer(noir, w, h, horiz, Math.round(mil.m), Math.round(p0), pas, e))
-}
-
-// Suit un trait depuis (m0, p0) : m avance le long du trait, p est sa position en travers
-function tracer(noir, w, h, horiz, m0, p0, pas, e) {
-  const L = horiz ? w : h, P = horiz ? h : w, st = 2 * e, fen = Math.max(2, Math.round(pas * 0.18))
-  const at = (m, p) => horiz ? noir[p * w + m] : noir[m * w + p]
-  const pts = [[m0, p0]]
-  for (const sens of [1, -1]) {
-    let p = p0, pente = 0, vide = 0
-    for (let m = m0 + sens * st; m >= 0 && m + st < L; m += sens * st) {
-      const pr = p + pente * st * sens
-      // pour chaque position en travers, combien de pixels noirs le long de ce petit segment
-      let bestP = -1, bestN = 0, nPlein = 0
-      for (let q = Math.round(pr - fen); q <= Math.round(pr + fen); q++) {
-        if (q < 0 || q >= P) continue
-        let n = 0; for (let k = 0; k < st; k++) n += at(m + k * sens, q)
-        if (n >= st * 0.8) nPlein++
-        if (n > bestN || (n === bestN && Math.abs(q - pr) < Math.abs(bestP - pr))) { bestN = n; bestP = q }
-      }
-      if (bestN < st * 0.6) { if (++vide > 3) break; p = Math.round(pr); continue } // fin du trait (après un petit trou toléré)
-      vide = 0
-      // dans une case noire tout est noir : on garde la trajectoire prévue
-      const q = nPlein > fen ? pr : bestP
-      pente = 0.7 * pente + 0.3 * ((q - p) / st) * sens
-      p = Math.round(q); pts.push([m, q])
+// ---------- le quadrillage ----------
+// Renvoie { R, C, N (croisements), mes (croisements mesurés [k, l, p]), n, conflits } ou null
+function quadrillage(noir0, w, h) {
+  // on épaissit le noir d'un pixel : un trait fin un peu effacé ferme quand même sa case
+  const noir = new Uint8Array(w * h)
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (!noir0[y * w + x]) continue
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const yy = y + dy, xx = x + dx
+      if (yy >= 0 && yy < h && xx >= 0 && xx < w) noir[yy * w + xx] = 1
     }
   }
-  pts.sort((a, b) => a[0] - b[0])
-  return relier(pts.map(x => x[0]), pts.map(x => x[1]))
+  // taches blanches (4-connexité : une diagonale ne relie pas deux cases)
+  const lab = new Int32Array(w * h), pile = new Int32Array(w * h), cand = []
+  let id = 0
+  for (let i0 = 0; i0 < w * h; i0++) {
+    if (noir[i0] || lab[i0]) continue
+    id++
+    let n = 0, sp = 0, x0 = w, x1 = 0, y0 = h, y1 = 0, sx = 0, sy = 0, bord = false
+    pile[sp++] = i0; lab[i0] = id
+    while (sp) {
+      const i = pile[--sp], x = i % w, y = (i - x) / w
+      n++; sx += x; sy += y
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y
+      if (x === 0 || y === 0 || x === w - 1 || y === h - 1) bord = true
+      if (x > 0 && !noir[i - 1] && !lab[i - 1]) { lab[i - 1] = id; pile[sp++] = i - 1 }
+      if (x < w - 1 && !noir[i + 1] && !lab[i + 1]) { lab[i + 1] = id; pile[sp++] = i + 1 }
+      if (y > 0 && !noir[i - w] && !lab[i - w]) { lab[i - w] = id; pile[sp++] = i - w }
+      if (y < h - 1 && !noir[i + w] && !lab[i + w]) { lab[i + w] = id; pile[sp++] = i + w }
+    }
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1
+    // une case : fermée, pas minuscule, assez pleine (une lettre au milieu en prend une partie), à peu près carrée
+    if (!bord && n >= 25 && n >= bw * bh * 0.35 && bw <= bh * 2.5 && bh <= bw * 2.5)
+      cand.push({ id, n, cx: sx / n, cy: sy / n, x0, x1, y0, y1 })
+  }
+  if (cand.length < 9) return null
+  // familles de taille : les cases d'une grille ont presque toutes la même aire. On essaie chaque famille
+  // un peu fournie et on garde celle qui donne le plus grand quadrillage.
+  const ln = cand.map(t => Math.log(t.n)), lo = Math.min(...ln), BIN = 0.2
+  const hist = new Map(); for (const v of ln) { const b = Math.floor((v - lo) / BIN); hist.set(b, (hist.get(b) || 0) + 1) }
+  const pics = [...hist.entries()].filter(([b, c]) => c >= 6 && c >= (hist.get(b - 1) || 0) && c >= (hist.get(b + 1) || 0)).map(([b]) => lo + (b + 0.5) * BIN)
+  let best = null
+  for (const pic of pics) {
+    const g = parcourir(cand.filter(t => Math.abs(Math.log(t.n) - pic) < 0.7))
+    if (g && (!best || g.n > best.n)) best = g
+  }
+  if (!best || best.n < 9) return null
+  // numéros de ligne et de colonne à partir de 0
+  const cs = best.cases
+  const i0 = Math.min(...cs.map(t => t.i)), j0 = Math.min(...cs.map(t => t.j))
+  const R = Math.max(...cs.map(t => t.i)) - i0 + 1, C = Math.max(...cs.map(t => t.j)) - j0 + 1
+  if (R < 2 || C < 2 || R > 45 || C > 45) return null
+  // croisements : chaque coin de case donne une mesure du croisement voisin ; on fait la moyenne
+  const acc = Array.from({ length: R + 1 }, () => Array.from({ length: C + 1 }, () => [0, 0, 0]))
+  const ajoute = (k, l, p) => { const a = acc[k][l]; a[0] += p[0]; a[1] += p[1]; a[2]++ }
+  for (const t of cs) {
+    // coins de la case : les points de la tache les plus loin dans les quatre directions diagonales
+    // de SA grille locale (une case penchée par la courbure garde ses vrais coins)
+    const u = norme(t.U), v = norme(t.V), dirs = [[-u[0] - v[0], -u[1] - v[1]], [u[0] - v[0], u[1] - v[1]], [-u[0] + v[0], -u[1] + v[1]], [u[0] + v[0], u[1] + v[1]]]
+    const bestv = [-Infinity, -Infinity, -Infinity, -Infinity], bp = [null, null, null, null]
+    for (let y = t.y0; y <= t.y1; y++) for (let x = t.x0; x <= t.x1; x++) {
+      if (lab[y * w + x] !== t.id) continue
+      for (let k = 0; k < 4; k++) { const p = x * dirs[k][0] + y * dirs[k][1]; if (p > bestv[k]) { bestv[k] = p; bp[k] = [x, y] } }
+    }
+    const r = t.i - i0, c = t.j - j0
+    ajoute(r, c, bp[0]); ajoute(r, c + 1, bp[1]); ajoute(r + 1, c, bp[2]); ajoute(r + 1, c + 1, bp[3])
+  }
+  const N = acc.map(row => row.map(a => a[2] ? [a[0] / a[2], a[1] / a[2]] : null))
+  const mes = []; N.forEach((row, k) => row.forEach((p, l) => { if (p) mes.push([k, l, p]) }))
+  const fige = N.map(row => row.map(p => !!p))
+  completer(N)
+  return { R, C, N: ajuster(ajuster(N, noir0, w, h, fige), noir0, w, h, fige), mes, n: cs.length, conflits: best.conflits }
 }
 
-// Garde la plus longue suite de traits à peu près régulièrement espacés (écarte bord de page, texte, ombre)
-function reguliers(c) {
-  let best = []
-  for (let s = 0; s < c.length - 1; s++) {
-    const pas = c[s + 1] - c[s]; if (pas < 6) continue
-    let e = s + 1, p = pas
-    while (e + 1 < c.length && Math.abs(c[e + 1] - c[e] - p) <= Math.max(2, p * 0.2)) { p = (p + c[e + 1] - c[e]) / 2; e++ }
-    if (e - s + 1 > best.length) best = c.slice(s, e + 1)
+// Parcourt les taches de proche en proche et leur donne un numéro (i = ligne, j = colonne).
+function parcourir(fam) {
+  const n = fam.length
+  if (n < 9) return null
+  // seaux pour trouver vite les voisines
+  const seaux = (pas) => {
+    const m = new Map()
+    for (const t of fam) { const k = Math.floor(t.cx / pas) + ',' + Math.floor(t.cy / pas); if (!m.has(k)) m.set(k, []); m.get(k).push(t) }
+    return (t, r) => {
+      const o = [], X = Math.floor(t.cx / pas), Y = Math.floor(t.cy / pas), k = Math.ceil(r)
+      for (let a = -k; a <= k; a++) for (let b = -k; b <= k; b++) for (const u of m.get((X + a) + ',' + (Y + b)) || []) if (u !== t) o.push(u)
+      return o
+    }
+  }
+  // pas typique : distance médiane à la plus proche voisine
+  const taille = Math.sqrt(fam.reduce((s, t) => s + t.n, 0) / n)
+  const pres = seaux(taille)
+  const dmin = fam.map(t => { let m = Infinity; for (const u of pres(t, 3)) m = Math.min(m, Math.hypot(u.cx - t.cx, u.cy - t.cy)); return m }).filter(isFinite).sort((a, b) => a - b)
+  if (!dmin.length) return null
+  const pas = dmin[dmin.length >> 1]
+  const autour = seaux(pas)
+  // directions de la grille : angles des vecteurs vers les voisines à un pas (modulo 90°)
+  const hist = new Float32Array(90)
+  for (const t of fam) for (const u of autour(t, 1.5)) {
+    const d = Math.hypot(u.cx - t.cx, u.cy - t.cy); if (d < pas * 0.7 || d > pas * 1.4) continue
+    let a = Math.atan2(u.cy - t.cy, u.cx - t.cx) * 180 / Math.PI; a = ((a % 90) + 90) % 90
+    hist[Math.round(a) % 90]++
+  }
+  const lisse = a => hist[a] + 0.5 * (hist[(a + 1) % 90] + hist[(a + 89) % 90])
+  let am = 0; for (let a = 1; a < 90; a++) if (lisse(a) > lisse(am)) am = a
+  let ang = am * Math.PI / 180; if (ang > Math.PI / 4) ang -= Math.PI / 2 // la direction la plus proche de l'horizontale
+  const U0 = [Math.cos(ang) * pas, Math.sin(ang) * pas], V0 = [-Math.sin(ang) * pas, Math.cos(ang) * pas]
+  // départ : les taches qui ont le plus de voisines à un pas
+  const voisines = t => autour(t, 1.5).filter(u => { const d = Math.hypot(u.cx - t.cx, u.cy - t.cy); return d > pas * 0.7 && d < pas * 1.3 }).length
+  let best = null
+  const essais = fam.map(t => [t, voisines(t)]).sort((a, b) => b[1] - a[1]).slice(0, 3).map(x => x[0])
+  for (const dep of essais) {
+    const vu = new Map(), pos = new Set()
+    let conflits = 0
+    vu.set(dep, { i: 0, j: 0, U: U0, V: V0 }); pos.add('0,0')
+    // d'abord les voisines directes (un pas), puis par-dessus une case noire (deux pas, ou en diagonale)
+    for (const portee of [1, 2]) {
+    const file = [...vu.keys()]
+    for (let f = 0; f < file.length; f++) {
+      const t = file[f], e = vu.get(t)
+      const det = e.U[0] * e.V[1] - e.U[1] * e.V[0]; if (Math.abs(det) < 1e-6) continue
+      for (const u of autour(t, portee + 0.6)) {
+        const dx = u.cx - t.cx, dy = u.cy - t.cy
+        const a = (dx * e.V[1] - dy * e.V[0]) / det, b = (e.U[0] * dy - e.U[1] * dx) / det // d = a U + b V
+        const ra = Math.round(a), rb = Math.round(b)
+        if (Math.abs(a - ra) > 0.3 || Math.abs(b - rb) > 0.3 || (ra === 0 && rb === 0) || Math.abs(ra) + Math.abs(rb) > portee) continue
+        const i = e.i + rb, j = e.j + ra, k = i + ',' + j
+        if (vu.has(u)) { const g = vu.get(u); if (g.i !== i || g.j !== j) conflits++; continue }
+        if (pos.has(k)) { conflits++; continue }
+        // la voisine prend les directions mesurées sur ce pas (le quadrillage peut se courber)
+        let U = e.U, V = e.V
+        if (rb === 0 && Math.abs(ra) === 1) U = [dx * ra, dy * ra]
+        if (ra === 0 && Math.abs(rb) === 1) V = [dx * rb, dy * rb]
+        vu.set(u, { i, j, U, V }); pos.add(k); file.push(u)
+      }
+    }
+    }
+    if (!best || vu.size > best.n) best = { n: vu.size, conflits, cases: [...vu].map(([t, e]) => ({ ...t, i: e.i, j: e.j, U: e.U, V: e.V })) }
   }
   return best
 }
 
-// Relie les points mesurés bande par bande ; au-delà des bandes extrêmes, prolonge en ligne droite
-function relier(M, P) {
-  return v => {
-    const n = M.length
-    let lo = 0, hi = n - 2
-    while (lo < hi) { const k = (lo + hi + 1) >> 1; if (M[k] <= v) lo = k; else hi = k - 1 }
-    const i = lo
-    const t = (v - M[i]) / (M[i + 1] - M[i])
-    return P[i] + t * (P[i + 1] - P[i])
+const norme = p => { const l = Math.hypot(p[0], p[1]) || 1; return [p[0] / l, p[1] / l] }
+
+// Complète les croisements manquants (cachés par des cases noires, ou cases non reconnues) :
+// une forme douce (polynôme du 3e degré en ligne et colonne) ajustée sur les croisements mesurés,
+// puis l'écart local des mesurés voisins est propagé (diffusion). Pas d'extrapolation qui s'emballe.
+function completer(N) {
+  const R = N.length - 1, C = N[0].length - 1
+  const mes = []
+  for (let k = 0; k <= R; k++) for (let l = 0; l <= C; l++) if (N[k][l]) mes.push([k, l, N[k][l]])
+  const deg = mes.length >= 30 ? 3 : mes.length >= 12 ? 2 : 1
+  const termes = (k, l) => { const a = 2 * k / R - 1, b = 2 * l / C - 1, t = []; for (let i = 0; i <= deg; i++) for (let j = 0; j <= deg - i; j++) t.push(a ** i * b ** j); return t }
+  const cx = moindresCarres(mes.map(([k, l]) => termes(k, l)), mes.map(m => m[2][0])), cy = moindresCarres(mes.map(([k, l]) => termes(k, l)), mes.map(m => m[2][1]))
+  const modele = (k, l) => { const t = termes(k, l); let x = 0, y = 0; for (let i = 0; i < t.length; i++) { x += cx[i] * t[i]; y += cy[i] * t[i] } return [x, y] }
+  let D = N.map((row, k) => row.map((p, l) => { if (!p) return [0, 0]; const m = modele(k, l); return [p[0] - m[0], p[1] - m[1]] }))
+  const connu = N.map(row => row.map(p => !!p))
+  for (let it = 0; it < 80; it++) {
+    const nv = D.map(r => r.map(v => v.slice()))
+    for (let k = 0; k <= R; k++) for (let l = 0; l <= C; l++) {
+      if (connu[k][l]) continue
+      let sx = 0, sy = 0, n = 0
+      for (const [dk, dl] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) { const a = k + dk, b = l + dl; if (a < 0 || a > R || b < 0 || b > C) continue; sx += D[a][b][0]; sy += D[a][b][1]; n++ }
+      nv[k][l] = [sx / n * 0.97, sy / n * 0.97] // l'écart s'éteint doucement loin des mesures
+    }
+    D = nv
   }
+  for (let k = 0; k <= R; k++) for (let l = 0; l <= C; l++) if (!N[k][l]) { const m = modele(k, l); N[k][l] = [m[0] + D[k][l][0], m[1] + D[k][l][1]] }
+}
+function moindresCarres(A, y) {
+  const n = A[0].length, M = Array.from({ length: n }, () => new Float64Array(n + 1))
+  for (let r = 0; r < A.length; r++) for (let i = 0; i < n; i++) { for (let j = 0; j < n; j++) M[i][j] += A[r][i] * A[r][j]; M[i][n] += A[r][i] * y[r] }
+  for (let i = 0; i < n; i++) M[i][i] += 1e-6
+  for (let c = 0; c < n; c++) {
+    let p = c; for (let r = c + 1; r < n; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r
+    ;[M[c], M[p]] = [M[p], M[c]]
+    for (let r = 0; r < n; r++) if (r !== c) { const f = M[r][c] / M[c][c]; for (let j = c; j <= n; j++) M[r][j] -= f * M[c][j] }
+  }
+  return Array.from({ length: n }, (_, i) => M[i][n] / M[i][i])
+}
+
+// Recale chaque croisement sur les traits de l'image : on cherche, à un quart de case près, le point
+// où un petit trait horizontal et un petit trait vertical (dans les directions locales) sont le plus noirs.
+// Dans une zone de cases noires tout est noir : on ne bouge pas.
+function ajuster(N, noir, w, h, fige) {
+  const R = N.length - 1, C = N[0].length - 1
+  const at = (x, y) => { x = Math.round(x); y = Math.round(y); return x >= 0 && y >= 0 && x < w && y < h ? noir[y * w + x] : 0 }
+  const g = (k, l) => N[Math.max(0, Math.min(R, k))][Math.max(0, Math.min(C, l))]
+  const out = N.map(r => r.map(p => p.slice()))
+  for (let k = 0; k <= R; k++) for (let l = 0; l <= C; l++) {
+    if (fige && fige[k][l]) continue // mesuré sur les coins des cases blanches : déjà juste
+    const p = N[k][l]
+    const a = g(k, l - 1), b = g(k, l + 1), c = g(k - 1, l), d = g(k + 1, l)
+    const u = [(b[0] - a[0]) / ((l < C) + (l > 0)), (b[1] - a[1]) / ((l < C) + (l > 0))], v = [(d[0] - c[0]) / ((k < R) + (k > 0)), (d[1] - c[1]) / ((k < R) + (k > 0))]
+    const pas = (Math.hypot(...u) + Math.hypot(...v)) / 2; if (!(pas > 4)) continue
+    const nb = Math.max(6, Math.min(24, Math.round(pas * 0.8))), fen = Math.max(1, Math.round(pas * 0.25))
+    // les bras ne sortent pas de la grille (un chiffre ou un titre au-dessus ne doit pas attirer le coin)
+    const u0 = l > 0 ? -0.4 : 0, u1 = l < C ? 0.4 : 0, v0 = k > 0 ? -0.4 : 0, v1 = k < R ? 0.4 : 0
+    // un trait = du noir AVEC du blanc de part et d'autre : on compte le noir du bras moins celui des deux
+    // bras parallèles décalés de 0,2 case. Au bord d'une case noire le vrai trait gagne encore (moitié blanc),
+    // et au milieu d'une zone noire rien ne gagne : le croisement ne bouge pas.
+    const bras = (x, y, d, o, t0, t1) => {
+      let s = 0
+      for (let i = 0; i <= nb; i++) {
+        const t = t0 + (t1 - t0) * i / nb, X = x + d[0] * t, Y = y + d[1] * t
+        s += at(X, Y) - 0.5 * (at(X + o[0] * 0.2, Y + o[1] * 0.2) + at(X - o[0] * 0.2, Y - o[1] * 0.2))
+      }
+      return s / (nb + 1)
+    }
+    const score = (x, y) => (bras(x, y, u, v, u0, u1) + bras(x, y, v, u, v0, v1)) / 2
+    // recherche à pas de 2 pixels, puis affinée autour du meilleur
+    let bs = -1, bx = p[0], by = p[1]
+    const essai = (x, y) => {
+      const sc = score(x, y)
+      if (sc > bs + 1e-9 || (Math.abs(sc - bs) < 1e-9 && Math.hypot(x - p[0], y - p[1]) < Math.hypot(bx - p[0], by - p[1]))) { bs = sc; bx = x; by = y }
+    }
+    for (let dy = -fen; dy <= fen; dy += 2) for (let dx = -fen; dx <= fen; dx += 2) essai(p[0] + dx, p[1] + dy)
+    const cx = bx, cy = by
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) essai(cx + dx, cy + dy)
+    if (bs >= 0.3) out[k][l] = [bx, by]
+  }
+  return out
+}
+
+// Maillage R × C tendu entre quatre coins (posés à la main, ou taille imposée).
+// S'il y a un quadrillage trouvé, on cherche quel décalage de numéros (lignes, colonnes) fait coïncider
+// le plus de croisements avec lui (vote) ; tous les croisements du maillage qui tombent dans le quadrillage
+// en prennent la position exacte. Les autres (rangées que le quadrillage n'a pas vues) suivent leurs voisins.
+function tendre(coins, R, C, q) {
+  const [a, b, c, d] = coins
+  const base = (k, l) => { const u = l / C, v = k / R; return [(1 - v) * ((1 - u) * a[0] + u * b[0]) + v * ((1 - u) * c[0] + u * d[0]), (1 - v) * ((1 - u) * a[1] + u * b[1]) + v * ((1 - u) * c[1] + u * d[1])] }
+  const pas = Math.max(2, (Math.hypot(b[0] - a[0], b[1] - a[1]) / C + Math.hypot(c[0] - a[0], c[1] - a[1]) / R) / 2)
+  let D = Array.from({ length: R + 1 }, () => Array.from({ length: C + 1 }, () => [0, 0]))
+  const fixe = Array.from({ length: R + 1 }, () => new Uint8Array(C + 1))
+  if (q) {
+    // vote : pour chaque croisement du maillage, le croisement mesuré le plus proche (moins d'un demi-pas)
+    const votes = new Map()
+    // (seulement près des coins : ailleurs, une page bombée écarte le maillage droit de plus d'une demi-case)
+    for (let k = 0; k <= R; k++) for (let l = 0; l <= C; l++) {
+      if (Math.min(k, R - k) > 2 || Math.min(l, C - l) > 2) continue
+      const p0 = base(k, l); let m = null, dm = pas * 0.5
+      for (const [kq, lq, p] of q.mes) { const dd = Math.hypot(p[0] - p0[0], p[1] - p0[1]); if (dd < dm) { dm = dd; m = [kq, lq] } }
+      if (m) { const key = (m[0] - k) + ',' + (m[1] - l); votes.set(key, (votes.get(key) || 0) + 1) }
+    }
+    const top = [...votes].sort((x, y) => y[1] - x[1])[0]
+    if (top && top[1] >= 3) {
+      const [dk, dl] = top[0].split(',').map(Number)
+      for (let k = 0; k <= R; k++) for (let l = 0; l <= C; l++) {
+        const kq = k + dk, lq = l + dl
+        if (kq < 0 || kq > q.R || lq < 0 || lq > q.C) continue
+        const p0 = base(k, l), p = q.N[kq][lq]
+        D[k][l] = [p[0] - p0[0], p[1] - p0[1]]; fixe[k][l] = 1
+      }
+    }
+  }
+  // les croisements sans correspondance suivent la moyenne de leurs voisins
+  for (let it = 0; it < 120; it++) {
+    const nv = D.map(r => r.map(v => v.slice()))
+    for (let k = 0; k <= R; k++) for (let l = 0; l <= C; l++) {
+      if (fixe[k][l]) continue
+      let sx = 0, sy = 0, n = 0
+      for (const [dk, dl] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) { const kk = k + dk, ll = l + dl; if (kk < 0 || kk > R || ll < 0 || ll > C) continue; sx += D[kk][ll][0]; sy += D[kk][ll][1]; n++ }
+      nv[k][l] = [sx / n, sy / n]
+    }
+    D = nv
+  }
+  const N = D.map((row, k) => row.map((v, l) => { const p = base(k, l); return [p[0] + v[0], p[1] + v[1]] }))
+  N.fige = fixe
+  return N
 }
 
 // Range les définitions lues ({ h:[{n,t}], v:[{n,t}] }) dans les mots de la grille, par numéro.

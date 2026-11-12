@@ -466,3 +466,12 @@ body.enjeu .m-dq small{display:none}
 .cap-fmt{margin:2px 0 4px 24px}.cap-fmt .cap-ck{font-size:15px;align-items:flex-start}.cap-fmt input{margin-top:3px;flex:none}
 .cap-coll{margin-top:10px;font:400 15px Times,serif;color:var(--grey)}.cap-coll summary{cursor:pointer}
 .cap-coll textarea{display:block;width:100%;box-sizing:border-box;margin:8px 0;font:400 16px/1.35 Times,serif;padding:8px;border:1px solid var(--ink);background:#fbf8f1;color:var(--ink)}
+/* photo annotée de la capture (lecture 4) */
+.cap-g{max-width:560px;min-width:0}
+.cap-cv{display:block;border:1px solid var(--ink);touch-action:none;background:#ddd6c6;max-width:100%}
+.cap-aide{font:italic 14px/1.35 Times,serif;color:var(--grey);margin:6px 0}
+.cap-taille{display:flex;gap:6px;align-items:center;font:400 16px Times,serif;margin:6px 0 10px;flex-wrap:wrap}
+.cap-taille input{width:58px;font:400 16px Times,serif;padding:3px 4px;border:1px solid var(--ink);background:#fbf8f1;color:var(--ink)}
+.cap-taille .pbtn{margin-left:4px}
+.cap-diag{font:400 12px/1.35 Narrow,sans-serif;letter-spacing:.03em;color:var(--grey);margin:8px 0 0}
+.cap-mg i[data-r]{cursor:pointer}
