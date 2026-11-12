@@ -605,18 +605,40 @@ export function reparer(d) {
   if (apres < avant + 2) return d
   return { ...d, h: r.h, v: r.v, format: d.format || r.format, repare: avant + ' → ' + apres }
 }
-// Découpe une section en numéros successifs : on cherche 1 (ou I), puis 2 (ou II)… dans l'ordre
+// Découpe une section en numéros successifs : on cherche 1 (ou I), puis 2 (ou II)… dans l'ordre.
+// Tolère les erreurs de lecture des chiffres (Texte en direct : « 11 » lu « Il », « 13 » lu « B », « III » lu « IIl »)
+// et un numéro illisible : on cherche alors le suivant, et le texte du numéro perdu reste avec le précédent.
+const OCR_ROM = { I: '[Il1|!í]', V: '[VvY]', X: '[Xx×]', L: '[L]', C: '[Cc]' }
+const OCR_NUM = { 0: '[0Oo]', 1: '[1lIi|!]', 2: '[2Z]', 3: '[3B]', 5: '[5S]', 6: '[6b]', 8: '[8B]', 9: '[9g]' }
+const nettoie = t => t.replace(/\s*[—–-]\s*$/, '').trim()
 function suite(s) {
   const L = []; if (!s) return L
-  const rom = /^[IVXLC]+\s*\./.test(s)
-  const tok = n => rom ? versRomain(n) : String(n)
+  const rom = /(^|[\s—–-])(II|III|IV|VI|IX|XI|XV)\s*[.,]/.test(s) && !/^\s*[0-9]/.test(s)
+  const motif = n => {
+    const m = (rom ? versRomain(n) : String(n)).split('').map(ch => (rom ? OCR_ROM : OCR_NUM)[ch] || ch)
+    if (!rom && n >= 10 && n < 20) m[0] += '?' // le « 1 » ancien, très fin, disparaît parfois (« 13 » lu « B »)
+    return m.join('')
+  }
+  const chercher = (n, pos) => {
+    // numéro suivi d'un point ; ou, après un tiret, numéro dont le point a été perdu
+    const re = new RegExp('(?:(^|[\\s—–-])' + motif(n) + '\\s*[.,]\\s|[—–-]\\s*' + motif(n) + '\\s+(?=[\\p{Lu}«"]))', 'gu')
+    re.lastIndex = pos; return re.exec(s)
+  }
   let pos = 0, n = 1, deb = null
   for (;;) {
-    const re = new RegExp('(^|[\\s—–-])' + tok(n) + '\\s*\\.\\s', 'g'); re.lastIndex = pos
-    const m = re.exec(s); if (!m) break
-    if (deb) L.push({ n: n - 1, t: s.slice(deb, m.index).replace(/\s*[—–-]\s*$/, '').trim() })
-    deb = m.index + m[0].length; pos = deb; n++
+    let m = null, k = n
+    for (; k < n + 3 && !m; k++) m = chercher(k, pos) // numéro illisible : on essaie les deux suivants
+    if (!m) break
+    k--
+    if (deb !== null) {
+      let t = s.slice(deb, m.index + (m[1] || '').length)
+      // un numéro sauté : on le cherche au dernier « - xx. » du morceau (numéro illisible)
+      const perdu = k === n + 1 && [...t.matchAll(/\s[—–-]\s*\S{1,5}?[.,]?\s+(?=[\p{Lu}«"])/gu)].pop()
+      if (perdu) { L.push({ n: n - 1, t: nettoie(t.slice(0, perdu.index)) }); L.push({ n, t: nettoie(t.slice(perdu.index + perdu[0].length)) }) }
+      else L.push({ n: n - 1, t: nettoie(t) })
+    }
+    deb = m.index + m[0].length; pos = deb; n = k + 1
   }
-  if (deb) L.push({ n: n - 1, t: s.slice(deb).replace(/\s*[—–-]\s*$/, '').trim() })
+  if (deb !== null) L.push({ n: n - 1, t: nettoie(s.slice(deb)) })
   return L.filter(x => x.t)
 }

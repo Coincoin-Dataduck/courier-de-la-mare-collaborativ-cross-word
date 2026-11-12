@@ -1,6 +1,6 @@
 // Le Courrier de la Mare — la salle de rédaction (admin)
 import { words, mirror } from './shared.js'
-import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche, rangerLignes, parLignes, lireTexte, reparer, versRomain as romain, LECTURE } from './capture.js?v=5'
+import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe, planche, rangerLignes, parLignes, lireTexte, reparer, versRomain as romain, LECTURE } from './capture.js?v=6'
 
 const $ = id => document.getElementById(id)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
