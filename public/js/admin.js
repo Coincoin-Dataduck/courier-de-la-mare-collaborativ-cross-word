@@ -5,6 +5,9 @@ import { chargerImage, versCanvas, pourEnvoi, lireGrille, ranger, caler, motsDe,
 const $ = id => document.getElementById(id)
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))
 const secret = location.pathname.split('/').filter(Boolean)[1]
+// On garde le secret sur l'appareil : le kiosque affiche alors le lien « La rédaction » (utile dans l'appli installée)
+const CLE = 'cdlm-redaction'
+try { localStorage.setItem(CLE, decodeURIComponent(secret)) } catch {}
 const API = '/api/admin/' + encodeURIComponent(decodeURIComponent(secret)) + '/grids'
 const ANNONCES = [
   'Vends paille. 25 francs les 12 brins.',
@@ -66,6 +69,12 @@ $('grilles').onclick = async e => {
   }
 }
 $('nouvelle').onclick = () => ouvrir(null)
+$('vers-kiosque').onclick = e => { if (dirty && !confirm('Quitter sans enregistrer ?')) e.preventDefault() }
+$('oublier').onclick = () => {
+  if (!confirm('Oublier le mot de passe de la rédaction sur cet appareil ?')) return
+  try { localStorage.removeItem(CLE) } catch {}
+  location.replace('/')
+}
 // Annoncer la grille ouverte sur Discord, tout de suite
 const DAPI = API.replace(/\/grids$/, '/discord')
 $('ed-annoncer').onclick = async () => {

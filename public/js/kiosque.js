@@ -96,3 +96,42 @@ async function start() {
   filtres(); rendu()
 }
 start()
+
+// ---- La rédaction depuis l'appli installée (pas de barre d'adresse) ----
+// Le secret est gardé sur l'appareil ; un lien « La rédaction » n'apparaît que là où il est connu.
+// Pour l'entrer : toucher 5 fois de suite le titre du journal.
+const CLE = 'cdlm-redaction'
+const lireCle = () => { try { return localStorage.getItem(CLE) } catch { return null } }
+function lienRedaction() {
+  const s = lireCle()
+  if (s) $('k-mil').innerHTML = '<a class="k-red" href="/admin/' + encodeURIComponent(s) + '">La rédaction →</a>'
+}
+lienRedaction()
+let touches = 0, tTouche = 0
+document.querySelector('.a-title').addEventListener('click', () => {
+  const t = Date.now(); touches = t - tTouche < 700 ? touches + 1 : 1; tTouche = t
+  if (touches < 5) return
+  touches = 0
+  const s = lireCle()
+  if (s) { location.href = '/admin/' + encodeURIComponent(s); return }
+  $('red-err').textContent = ''; $('red-s').value = ''
+  $('red').classList.remove('hide'); $('red-s').focus()
+})
+$('red-non').onclick = () => $('red').classList.add('hide')
+$('red').onclick = e => { if (e.target.id === 'red') $('red').classList.add('hide') }
+$('red-f').onsubmit = async e => {
+  e.preventDefault()
+  const s = $('red-s').value.trim()
+  if (!s) return
+  $('red-ok').disabled = true; $('red-err').textContent = ''
+  try {
+    const r = await fetch('/api/admin/' + encodeURIComponent(s) + '/grids')
+    if (r.ok) {
+      try { localStorage.setItem(CLE, s) } catch {}
+      location.href = '/admin/' + encodeURIComponent(s)
+      return
+    }
+    $('red-err').textContent = r.status === 404 ? 'Ce n’est pas le bon mot de passe.' : 'Erreur ' + r.status + ', réessaie.'
+  } catch { $('red-err').textContent = 'Pas de réseau…' }
+  $('red-ok').disabled = false
+}

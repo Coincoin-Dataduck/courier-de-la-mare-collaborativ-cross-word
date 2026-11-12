@@ -475,3 +475,16 @@ body.enjeu .m-dq small{display:none}
 .cap-taille .pbtn{margin-left:4px}
 .cap-diag{font:400 12px/1.35 Narrow,sans-serif;letter-spacing:.03em;color:var(--grey);margin:8px 0 0}
 .cap-mg i[data-r]{cursor:pointer}
+
+/* accès à la rédaction depuis le kiosque (appli installée) */
+.k-red{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.a-title{-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+.red-fond{position:fixed;inset:0;z-index:50;background:rgba(36,33,29,.45);display:flex;align-items:center;justify-content:center;padding:16px}
+.red-fond.hide{display:none}
+.red-boite{background:#f4efe3;border:1px solid var(--ink);box-shadow:4px 4px 0 var(--ink);padding:18px 18px 14px;width:100%;max-width:340px;color:var(--ink)}
+.red-boite h3{font:700 22px/1.1 Century,serif;margin:0 0 12px}
+.red-boite label{display:block;font:400 12px/1.2 Narrow,sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.red-boite input{display:block;width:100%;box-sizing:border-box;margin-top:6px;font:400 17px Times,serif;padding:7px 8px;border:1px solid var(--ink);background:#fbf8f1;color:var(--ink)}
+.red-err{min-height:1.2em;font:italic 14px/1.3 Times,serif;color:#b3261e;margin:8px 0}
+.red-acts{display:flex;gap:8px;justify-content:flex-end}
+.oublier{margin:18px 0 0;font:italic 14px/1.4 Times,serif;color:var(--grey)}

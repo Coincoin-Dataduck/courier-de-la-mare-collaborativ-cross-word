@@ -40,7 +40,7 @@
 
 <section class="page" id="journal">
   <div class="tex"><svg preserveAspectRatio="none"><rect width="100%" height="100%" filter="url(#fib)" opacity=".5"/><rect width="100%" height="100%" filter="url(#cloud)" opacity=".35"/></svg></div>
-  <div class="a-top ink"><span><b id="m-date"></b></span><span>Le kiosque</span><span>Prix : 42 francs</span></div>
+  <div class="a-top ink"><span><b id="m-date"></b></span><span id="k-mil">Le kiosque</span><span>Prix : 42 francs</span></div>
   <header class="a-mast">
     <div class="ear ink"><h5>Au kiosque</h5><div class="r"><span>En cours</span><b id="k-cours">—</b></div><div class="r"><span>Tamponnées</span><b id="k-tamp">—</b></div><p class="rocket">L'avis de Rocket : bon temps pour rester dedans.</p></div>
     <h1 class="a-title ink">Le Courrier<br>de la Mare</h1>
@@ -57,5 +57,13 @@
   </footer>
 
 </section>
+<div id="red" class="red-fond hide" role="dialog" aria-modal="true" aria-labelledby="red-t">
+  <form class="red-boite" id="red-f" autocomplete="off">
+    <h3 id="red-t">Réservé au personnel</h3>
+    <label>Mot de passe de la rédaction<input type="password" id="red-s" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
+    <p class="red-err" id="red-err"></p>
+    <div class="red-acts"><button type="button" class="pbtn" id="red-non">Annuler</button><button class="pbtn vert" id="red-ok">Entrer</button></div>
+  </form>
+</div>
 <script type="module" src="/js/kiosque.js"></script>
 </body></html>
